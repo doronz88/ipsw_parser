@@ -5,3 +5,22 @@
 # Overview
 
 python3 utility for parsing and extracting data from IPSW.
+
+# Installation
+
+```shell
+python3 -m pip install ipsw_parser
+```
+
+# Usage
+
+```
+Usage: python -m ipsw_parser [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  extract  extract .ipsw into filesystem layout
+  info     parse given .ipsw basic info
+```

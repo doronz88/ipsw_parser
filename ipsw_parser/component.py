@@ -38,7 +38,7 @@ class Component:
         self._path = path
 
     @cached_property
-    def path(self):
+    def path(self) -> str:
         if self._path:
             return self._path
 
@@ -58,7 +58,7 @@ class Component:
         return path
 
     @cached_property
-    def data(self):
+    def data(self) -> bytes:
         if self._data is None:
             self.logger.debug(f'Extracting {os.path.basename(self.path)} ({self.path})')
             return self.build_identity.build_manifest.ipsw.read(self.path)

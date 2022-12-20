@@ -3,3 +3,4 @@ click
 coloredlogs
 cached_property
 asn1
+plumbum
