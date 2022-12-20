@@ -1,15 +1,16 @@
-from typing import List
-
 import logging
 import zipfile
 from contextlib import contextmanager
 from io import BytesIO
+from typing import List
 
 from cached_property import cached_property
 from construct import Const, Default, PaddedString, Struct
 
 from ipsw_parser.build_manifest import BuildManifest
 from ipsw_parser.firmware import Firmware
+
+logger = logging.getLogger(__name__)
 
 cpio_odc_header = Struct(
     'c_magic' / Const('070707', PaddedString(6, 'utf8')),
@@ -100,3 +101,11 @@ class IPSW:
 
     def get_firmware(self, firmware_path: str) -> Firmware:
         return Firmware(firmware_path, self)
+
+    def get_development_files(self) -> List[str]:
+        result = []
+        for entry in self._archive.namelist():
+            for release in ('devel', 'kasan', 'research'):
+                if release in entry.lower():
+                    result.append(entry)
+        return result
