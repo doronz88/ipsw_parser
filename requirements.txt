@@ -2,5 +2,5 @@ construct>=2.9.29
 click
 coloredlogs
 cached_property
-asn1
 plumbum
+pyimg4>=0.7
