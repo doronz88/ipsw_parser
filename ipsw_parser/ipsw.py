@@ -1,12 +1,10 @@
 import logging
 import zipfile
 from contextlib import contextmanager
-from io import BytesIO
 from typing import List
 
 from cached_property import cached_property
 from construct import Const, Default, PaddedString, Struct
-
 from ipsw_parser.build_manifest import BuildManifest
 from ipsw_parser.firmware import Firmware
 
@@ -28,8 +26,8 @@ cpio_odc_header = Struct(
 
 
 class IPSW:
-    def __init__(self, file: BytesIO):
-        self._archive = zipfile.ZipFile(file)
+    def __init__(self, archive: zipfile.ZipFile):
+        self._archive = archive
         self._logger = logging.getLogger(__file__)
         self.build_manifest = BuildManifest(self, self._archive.read('BuildManifest.plist'))
 
