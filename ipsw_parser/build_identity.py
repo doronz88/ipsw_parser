@@ -17,7 +17,7 @@ def _extract_dmg(buf: bytes, output: Path) -> None:
     hdiutil = local['hdiutil']
 
     # darwin system statistically have problems cleaning up after detaching the mountpoint
-    with TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
+    with TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir)
 
         mnt = temp_dir / 'mnt'
