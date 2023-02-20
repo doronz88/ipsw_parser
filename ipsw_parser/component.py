@@ -2,6 +2,7 @@ import logging
 import os.path
 
 from cached_property import cached_property
+
 from ipsw_parser.exceptions import IpswException
 from ipsw_parser.img4 import stitch_component
 

@@ -100,6 +100,15 @@ class BuildIdentity(UserDict):
             except KeyError:
                 pass
 
+        if additional_keys is None:
+            # special treat for RequiresUIDMode
+            info = self.get('Info')
+            if info is None:
+                return
+            requires_uid_mode = info.get('RequiresUIDMode')
+            if requires_uid_mode is not None:
+                parameters['RequiresUIDMode'] = requires_uid_mode
+
     def extract(self, output: Path) -> None:
         logger.info(f'extracting into: {output}')
 
