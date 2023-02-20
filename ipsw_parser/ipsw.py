@@ -5,6 +5,7 @@ from typing import List
 
 from cached_property import cached_property
 from construct import Const, Default, PaddedString, Struct
+
 from ipsw_parser.build_manifest import BuildManifest
 from ipsw_parser.firmware import Firmware
 

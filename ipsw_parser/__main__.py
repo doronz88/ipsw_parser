@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
+import logging
 from pathlib import Path
 from typing import IO
 from zipfile import ZipFile
 
 import click
 import coloredlogs
-import logging
 
 from ipsw_parser.ipsw import IPSW
 
