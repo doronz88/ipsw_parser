@@ -125,17 +125,16 @@ class BuildIdentity(UserDict):
         kernel_output.write_bytes(kernel_component.data)
 
         for cryptex in ('App', 'OS'):
-            cryptex_component = build_identity.get_component(f'Cryptex,{cryptex}')
+            name = {
+                'App': 'Cryptex1,AppOS',
+                'OS': 'Cryptex1,SystemOS',
+            }[cryptex]
 
-            if cryptex_component is None:
+            if not build_identity.has_component(name):
                 continue
 
             cryptex_path = output / 'private/preboot/Cryptexes' / cryptex
             cryptex_path.mkdir(parents=True, exist_ok=True)
 
-            name = {
-                'App': 'Cryptex1,AppOS',
-                'OS': 'Cryptex1,SystemOS',
-            }[cryptex]
             logger.info(f'extracting {name} into: {cryptex_path}')
             _extract_dmg(build_identity.get_component(name).data, cryptex_path)
