@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from typing import List, Mapping
 
 from cached_property import cached_property
-from plumbum import local
+from plumbum import CommandNotFound, local
 
 from ipsw_parser.component import Component
 
@@ -138,3 +138,21 @@ class BuildIdentity(UserDict):
 
             logger.info(f'extracting {name} into: {cryptex_path}')
             _extract_dmg(build_identity.get_component(name).data, cryptex_path)
+
+        try:
+            ipsw = local['ipsw']
+        except CommandNotFound:
+            logger.warning('skipping DSC split since no blacktop/ipsw could not be found in path')
+            return
+
+        dsc_paths = [output / 'System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64',
+                     output / 'System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e',
+                     output / 'System/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64',
+                     output / 'System/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e']
+
+        for dsc in dsc_paths:
+            if not dsc.exists():
+                continue
+
+            logger.info(f'splitting DSC: {dsc}')
+            ipsw('dyld', 'split', dsc, output)

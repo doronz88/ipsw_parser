@@ -12,6 +12,9 @@ python3 utility for parsing and extracting data from IPSW.
 python3 -m pip install ipsw_parser
 ```
 
+Additionally, if you installed [blacktop/ipsw](https://github.com/blacktop/ipsw), the IPSW extraction will also contain
+the split DSC.
+
 # Usage
 
 ```
