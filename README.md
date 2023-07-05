@@ -9,7 +9,7 @@ python3 utility for parsing and extracting data from IPSW.
 # Installation
 
 ```shell
-python3 -m pip install ipsw_parser
+python3 -m pip install ipsw-parser
 ```
 
 Additionally, if you installed [blacktop/ipsw](https://github.com/blacktop/ipsw), the IPSW extraction will also contain
