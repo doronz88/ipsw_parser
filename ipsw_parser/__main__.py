@@ -55,6 +55,8 @@ def extract(file: IO, output: str):
 
     ipsw = IPSW(ZipFile(file))
     ipsw.build_manifest.build_identities[0].extract(output)
+    ipsw.archive.extractall(
+        path=output, members=[f for f in ipsw.archive.filelist if f.filename.startswith('Firmware')])
 
 
 if __name__ == '__main__':

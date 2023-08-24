@@ -28,9 +28,9 @@ cpio_odc_header = Struct(
 
 class IPSW:
     def __init__(self, archive: zipfile.ZipFile):
-        self._archive = archive
+        self.archive = archive
         self._logger = logging.getLogger(__file__)
-        self.build_manifest = BuildManifest(self, self._archive.read('BuildManifest.plist'))
+        self.build_manifest = BuildManifest(self, self.archive.read('BuildManifest.plist'))
 
     @cached_property
     def restore_version(self) -> bytes:
@@ -42,11 +42,11 @@ class IPSW:
 
     @cached_property
     def filelist(self) -> List[zipfile.ZipInfo]:
-        return self._archive.filelist
+        return self.archive.filelist
 
     @contextmanager
     def open_path(self, path: str):
-        file = self._archive.open(path)
+        file = self.archive.open(path)
         try:
             yield file
         finally:
@@ -92,7 +92,7 @@ class IPSW:
         return result
 
     def read(self, path: str) -> bytes:
-        return self._archive.read(path)
+        return self.archive.read(path)
 
     def get_global_manifest(self, macos_variant: str, device_class: str) -> bytes:
         manifest_path = f'Firmware/Manifests/restore/{macos_variant}/apticket.{device_class}.im4m'
@@ -103,7 +103,7 @@ class IPSW:
 
     def get_development_files(self) -> List[str]:
         result = []
-        for entry in self._archive.namelist():
+        for entry in self.archive.namelist():
             for release in ('devel', 'kasan', 'research'):
                 if release in entry.lower():
                     result.append(entry)
