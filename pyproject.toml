@@ -1,6 +1,6 @@
 [project]
 name = "ipsw-parser"
-version = "1.2.0"
+version = "1.2.1"
 description = "python3 utility for parsing and extracting data from IPSW"
 readme = "README.md"
 requires-python = ">=3.8"
