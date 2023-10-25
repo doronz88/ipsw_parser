@@ -1,5 +1,5 @@
 [project]
-name = "ipsw_parser"
+name = "ipsw-parser"
 version = "1.2.0"
 description = "python3 utility for parsing and extracting data from IPSW"
 readme = "README.md"
@@ -33,7 +33,7 @@ test = ["pytest"]
 "Bug Reports" = "https://github.com/doronz88/ipsw_parser/issues"
 
 [project.scripts]
-rpcclient = "ipsw_parser.__main__:cli"
+ipsw-parser = "ipsw_parser.__main__:cli"
 
 [tool.setuptools.packages.find]
 exclude = ["docs*", "tests*"]
