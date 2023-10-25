@@ -33,7 +33,7 @@ test = ["pytest"]
 "Bug Reports" = "https://github.com/doronz88/ipsw_parser/issues"
 
 [project.scripts]
-rpcclient = "ipsw_parser.__main__:cli"
+ipsw_parser = "ipsw_parser.__main__:cli"
 
 [tool.setuptools.packages.find]
 exclude = ["docs*", "tests*"]
