@@ -30,7 +30,7 @@ class IPSW:
     def __init__(self, archive: zipfile.ZipFile):
         self.archive = archive
         self._logger = logging.getLogger(__file__)
-        self.build_manifest = BuildManifest(self, self.archive.read('BuildManifest.plist'))
+        self.build_manifest = BuildManifest(self, self.archive.read(next(f for f in self.archive.namelist() if f.startswith('BuildManifest') and f.endswith('.plist'))))
 
     @cached_property
     def restore_version(self) -> bytes:
