@@ -155,4 +155,4 @@ class BuildIdentity(UserDict):
                 continue
 
             logger.info(f'splitting DSC: {dsc}')
-            ipsw('dyld', 'split', dsc, output)
+            ipsw('dyld', 'split', dsc, '-o', output)
