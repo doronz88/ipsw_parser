@@ -7,3 +7,4 @@ version.txt
 debug/
 *.pyc
 *.egg-info/
+/ipsw_parser/_version.py
