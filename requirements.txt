@@ -3,4 +3,4 @@ click
 coloredlogs
 cached_property
 plumbum
-pyimg4>=0.7
+pyimg4>=0.8.5
