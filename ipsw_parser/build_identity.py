@@ -6,25 +6,30 @@ from tempfile import TemporaryDirectory
 from typing import List, Mapping
 
 from cached_property import cached_property
-from plumbum import CommandNotFound, local
+from plumbum import local
 
 from ipsw_parser.component import Component
 
 logger = logging.getLogger(__name__)
+ipsw = local['ipsw']
 
 
 def _extract_dmg(buf: bytes, output: Path) -> None:
     hdiutil = local['hdiutil']
-
     # darwin system statistically have problems cleaning up after detaching the mountpoint
     with TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir)
-
         mnt = temp_dir / 'mnt'
         mnt.mkdir()
-
         dmg = temp_dir / 'image.dmg'
-        dmg.write_bytes(buf)
+
+        if buf.startswith(b'AEA1'):
+            logger.debug('Found Apple Encrypted Archive. Decrypting...')
+            dmg_aea = Path(str(dmg) + '.aea')
+            dmg_aea.write_bytes(buf)
+            ipsw('fw', 'aea', dmg_aea, '-o', temp_dir)
+        else:
+            dmg.write_bytes(buf)
 
         hdiutil('attach', '-mountpoint', mnt, dmg)
 
@@ -138,12 +143,6 @@ class BuildIdentity(UserDict):
 
             logger.info(f'extracting {name} into: {cryptex_path}')
             _extract_dmg(build_identity.get_component(name).data, cryptex_path)
-
-        try:
-            ipsw = local['ipsw']
-        except CommandNotFound:
-            logger.warning('skipping DSC split since no blacktop/ipsw could not be found in path')
-            return
 
         dsc_paths = [output / 'System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64',
                      output / 'System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e',
