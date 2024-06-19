@@ -11,10 +11,10 @@ from plumbum import local
 from ipsw_parser.component import Component
 
 logger = logging.getLogger(__name__)
-ipsw = local['ipsw']
 
 
 def _extract_dmg(buf: bytes, output: Path) -> None:
+    ipsw = local['ipsw']
     hdiutil = local['hdiutil']
     # darwin system statistically have problems cleaning up after detaching the mountpoint
     with TemporaryDirectory() as temp_dir:
@@ -115,6 +115,7 @@ class BuildIdentity(UserDict):
                 parameters['RequiresUIDMode'] = requires_uid_mode
 
     def extract(self, output: Path) -> None:
+        ipsw = local['ipsw']
         logger.info(f'extracting into: {output}')
 
         build_identity = self.build_manifest.build_identities[0]
