@@ -3,7 +3,7 @@ import shutil
 from collections import UserDict
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import List, Mapping
+from typing import List, Mapping, Optional
 
 from cached_property import cached_property
 from plumbum import local
@@ -13,7 +13,7 @@ from ipsw_parser.component import Component
 logger = logging.getLogger(__name__)
 
 
-def _extract_dmg(buf: bytes, output: Path) -> None:
+def _extract_dmg(buf: bytes, output: Path, sub_path: Optional[Path] = None) -> None:
     ipsw = local['ipsw']
     hdiutil = local['hdiutil']
     # darwin system statistically have problems cleaning up after detaching the mountpoint
@@ -34,12 +34,32 @@ def _extract_dmg(buf: bytes, output: Path) -> None:
         hdiutil('attach', '-mountpoint', mnt, dmg)
 
         try:
-            shutil.copytree(mnt, output, symlinks=True, dirs_exist_ok=True)
+            if sub_path is None:
+                src = mnt
+            else:
+                src = mnt / sub_path
+            shutil.copytree(src, output, symlinks=True, dirs_exist_ok=True)
         except shutil.Error:
             # when overwriting the same files, some of them don't contain write permissions
             pass
 
         hdiutil('detach', '-force', mnt)
+
+
+def _split_dsc(root: Path) -> None:
+    ipsw = local['ipsw']
+    dsc_paths = [
+        root / 'System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64',
+        root / 'System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e',
+        root / 'private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64',
+        root / 'private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e']
+
+    for dsc in dsc_paths:
+        if not dsc.exists():
+            continue
+
+        logger.info(f'splitting DSC: {dsc}')
+        ipsw('dyld', 'split', dsc, '-o', root)
 
 
 class BuildIdentity(UserDict):
@@ -116,8 +136,19 @@ class BuildIdentity(UserDict):
             if requires_uid_mode is not None:
                 parameters['RequiresUIDMode'] = requires_uid_mode
 
+    def extract_dsc(self, output: Path) -> None:
+        build_identity = self.build_manifest.build_identities[0]
+        if not build_identity.has_component('Cryptex1,SystemOS'):
+            return
+
+        device_support_symbols_path = output / 'private/preboot/Cryptexes/OS/System'
+        device_support_symbols_path.mkdir(parents=True, exist_ok=True)
+
+        _extract_dmg(build_identity.get_component('Cryptex1,SystemOS').data, device_support_symbols_path,
+                     sub_path=Path('System'))
+        _split_dsc(output)
+
     def extract(self, output: Path) -> None:
-        ipsw = local['ipsw']
         logger.info(f'extracting into: {output}')
 
         build_identity = self.build_manifest.build_identities[0]
@@ -147,14 +178,4 @@ class BuildIdentity(UserDict):
             logger.info(f'extracting {name} into: {cryptex_path}')
             _extract_dmg(build_identity.get_component(name).data, cryptex_path)
 
-        dsc_paths = [output / 'System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64',
-                     output / 'System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e',
-                     output / 'System/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64',
-                     output / 'System/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e']
-
-        for dsc in dsc_paths:
-            if not dsc.exists():
-                continue
-
-            logger.info(f'splitting DSC: {dsc}')
-            ipsw('dyld', 'split', dsc, '-o', output)
+        _split_dsc(output)
