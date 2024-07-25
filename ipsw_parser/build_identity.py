@@ -87,7 +87,7 @@ class BuildIdentity(UserDict):
             key_list += ['UniqueBuildID', 'Ap,OSLongVersion', 'Ap,OSReleaseType', 'Ap,ProductType', 'Ap,SDKPlatform',
                          'Ap,SikaFuse', 'Ap,Target', 'Ap,TargetType', 'ApBoardID', 'ApChipID',
                          'ApSecurityDomain', 'BMU,BoardID', 'BMU,ChipID', 'BbChipID', 'BbProvisioningManifestKeyHash',
-                         'BbActivationManifestKeyHash', 'BbCalibrationManifestKeyHash',
+                         'BbActivationManifestKeyHash', 'BbCalibrationManifestKeyHash', 'Ap,ProductMarketingVersion',
                          'BbFactoryActivationManifestKeyHash', 'BbFDRSecurityKeyHash', 'BbSkeyId', 'SE,ChipID',
                          'Savage,ChipID', 'Savage,PatchEpoch', 'Yonkers,BoardID', 'Yonkers,ChipID',
                          'Yonkers,PatchEpoch', 'Rap,BoardID', 'Rap,ChipID', 'Rap,SecurityDomain', 'Baobab,BoardID',
