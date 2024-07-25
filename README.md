@@ -18,12 +18,15 @@ the split DSC.
 # Usage
 
 ```
-Usage: python -m ipsw_parser [OPTIONS] COMMAND [ARGS]...
+Usage: ipsw-parser [OPTIONS] COMMAND [ARGS]...
+
+  CLI utility for extracting info from IPSW files
 
 Options:
   --help  Show this message and exit.
 
 Commands:
-  extract  extract .ipsw into filesystem layout
-  info     parse given .ipsw basic info
+  device-support  Create DeviceSupport directory
+  extract         Extract .ipsw into filesystem layout
+  info            Parse given .ipsw basic info
 ```
