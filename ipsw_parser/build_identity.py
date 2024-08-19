@@ -7,6 +7,7 @@ from typing import List, Mapping, Optional
 
 from cached_property import cached_property
 from plumbum import local
+from pyimg4 import IM4P
 
 from ipsw_parser.component import Component
 
@@ -161,7 +162,10 @@ class BuildIdentity(UserDict):
         kernel_output = output / 'System/Library/Caches/com.apple.kernelcaches' / kernel_path.parts[-1]
 
         logger.info(f'extracting kernel into: {kernel_output}')
-        kernel_output.write_bytes(kernel_component.data)
+        # kernel_output.write_bytes(kernel_component.data)
+        im4p = IM4P(kernel_component.data)
+        im4p.payload.decompress()
+        kernel_output.write_bytes(im4p.payload.output().data)
 
         for cryptex in ('App', 'OS'):
             name = {
