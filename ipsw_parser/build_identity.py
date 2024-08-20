@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from typing import List, Mapping, Optional
 
 from cached_property import cached_property
-from plumbum import local
+from plumbum import ProcessExecutionError, local
 from pyimg4 import IM4P
 
 from ipsw_parser.component import Component
@@ -162,10 +162,15 @@ class BuildIdentity(UserDict):
         kernel_output = output / 'System/Library/Caches/com.apple.kernelcaches' / kernel_path.parts[-1]
 
         logger.info(f'extracting kernel into: {kernel_output}')
-        # kernel_output.write_bytes(kernel_component.data)
         im4p = IM4P(kernel_component.data)
         im4p.payload.decompress()
         kernel_output.write_bytes(im4p.payload.output().data)
+        try:
+            # In case the kernel is a FAT image, extract the arm64 macho
+            local['ipsw']('macho', 'lipo', '-a', 'arm64', kernel_output)
+            list(kernel_output.parent.glob('*.arm64'))[0].rename(kernel_output)
+        except ProcessExecutionError:
+            pass
 
         for cryptex in ('App', 'OS'):
             name = {
