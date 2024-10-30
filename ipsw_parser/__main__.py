@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 from pathlib import Path
-from typing import IO
+from typing import IO, Optional
 from zipfile import ZipFile
 
 import click
@@ -20,6 +20,12 @@ logging.getLogger('blib2to3.pgen2.driver').disabled = True
 logging.getLogger('urllib3.connectionpool').disabled = True
 
 logger = logging.getLogger(__name__)
+
+PEM_DB_ENV_VAR = 'IPSW_PARSER_PEM_DB'
+
+pem_db_option = click.option('--pem-db', envvar=PEM_DB_ENV_VAR,
+                             help='Path DB file url (can be either a filesystem path or an HTTP URL). '
+                                  'Alternatively, use the IPSW_PARSER_PEM_DB envvar.')
 
 
 @click.group()
@@ -47,7 +53,8 @@ def info(file) -> None:
 @cli.command('extract')
 @click.argument('file', type=click.Path(exists=True, file_okay=True, dir_okay=False))
 @click.argument('output', type=click.Path(exists=False))
-def extract(file: IO, output: str) -> None:
+@pem_db_option
+def extract(file: IO, output: str, pem_db: Optional[str]) -> None:
     """ Extract .ipsw into filesystem layout """
     output = Path(output)
 
@@ -55,16 +62,17 @@ def extract(file: IO, output: str) -> None:
         output.mkdir(parents=True, exist_ok=True)
 
     ipsw = IPSW(ZipFile(file))
-    ipsw.build_manifest.build_identities[0].extract(output)
+    ipsw.build_manifest.build_identities[0].extract(output, pem_db=pem_db)
     ipsw.archive.extractall(
         path=output, members=[f for f in ipsw.archive.filelist if f.filename.startswith('Firmware')])
 
 
 @cli.command('device-support')
 @click.argument('file', type=click.Path(exists=True, file_okay=True, dir_okay=False))
-def device_support(file: IO) -> None:
+@pem_db_option
+def device_support(file: IO, pem_db: Optional[str]) -> None:
     """ Create DeviceSupport directory """
-    IPSW(ZipFile(file)).create_device_support()
+    IPSW(ZipFile(file)).create_device_support(pem_db=pem_db)
 
 
 if __name__ == '__main__':

@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Optional
 
+import requests
 from cached_property import cached_property
 from plumbum import ProcessExecutionError, local
 from pyimg4 import IM4P
@@ -14,7 +15,7 @@ from ipsw_parser.component import Component
 logger = logging.getLogger(__name__)
 
 
-def _extract_dmg(buf: bytes, output: Path, sub_path: Optional[Path] = None) -> None:
+def _extract_dmg(buf: bytes, output: Path, sub_path: Optional[Path] = None, pem_db: Optional[str] = None) -> None:
     ipsw = local['ipsw']
     hdiutil = local['hdiutil']
     # darwin system statistically have problems cleaning up after detaching the mountpoint
@@ -28,7 +29,15 @@ def _extract_dmg(buf: bytes, output: Path, sub_path: Optional[Path] = None) -> N
             logger.debug('Found Apple Encrypted Archive. Decrypting...')
             dmg_aea = Path(str(dmg) + '.aea')
             dmg_aea.write_bytes(buf)
-            ipsw('fw', 'aea', dmg_aea, '-o', temp_dir)
+            args = ['fw', 'aea', dmg_aea, '-o', temp_dir]
+            if pem_db is not None:
+                if '://' in pem_db:
+                    # create a local file containing it
+                    temp_pem_db = temp_dir / 'pem-db.json'
+                    temp_pem_db.write_text(requests.get(pem_db, verify=False).text)
+                    pem_db = temp_pem_db
+                args += ['--pem-db', pem_db]
+            ipsw(args)
         else:
             dmg.write_bytes(buf)
 
@@ -137,7 +146,7 @@ class BuildIdentity(UserDict):
             if requires_uid_mode is not None:
                 parameters['RequiresUIDMode'] = requires_uid_mode
 
-    def extract_dsc(self, output: Path) -> None:
+    def extract_dsc(self, output: Path, pem_db: Optional[str] = None) -> None:
         build_identity = self.build_manifest.build_identities[0]
         if not build_identity.has_component('Cryptex1,SystemOS'):
             return
@@ -146,16 +155,16 @@ class BuildIdentity(UserDict):
         device_support_symbols_path.mkdir(parents=True, exist_ok=True)
 
         _extract_dmg(build_identity.get_component('Cryptex1,SystemOS').data, device_support_symbols_path,
-                     sub_path=Path('System'))
+                     sub_path=Path('System'), pem_db=pem_db)
         _split_dsc(output)
 
-    def extract(self, output: Path) -> None:
+    def extract(self, output: Path, pem_db: Optional[str] = None) -> None:
         logger.info(f'extracting into: {output}')
 
         build_identity = self.build_manifest.build_identities[0]
 
         logger.info(f'extracting OS into: {output}')
-        _extract_dmg(build_identity.get_component('OS').data, output)
+        _extract_dmg(build_identity.get_component('OS').data, output, pem_db=pem_db)
 
         kernel_component = build_identity.get_component('KernelCache')
         kernel_path = Path(kernel_component.path)
@@ -185,6 +194,6 @@ class BuildIdentity(UserDict):
             cryptex_path.mkdir(parents=True, exist_ok=True)
 
             logger.info(f'extracting {name} into: {cryptex_path}')
-            _extract_dmg(build_identity.get_component(name).data, cryptex_path)
+            _extract_dmg(build_identity.get_component(name).data, cryptex_path, pem_db=pem_db)
 
         _split_dsc(output)
