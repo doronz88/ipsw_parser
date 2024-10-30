@@ -4,6 +4,7 @@ import zipfile
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from cached_property import cached_property
 from construct import Const, Default, PaddedString, Struct
@@ -112,13 +113,13 @@ class IPSW:
                     result.append(entry)
         return result
 
-    def create_device_support(self) -> None:
+    def create_device_support(self, pem_db: Optional[str] = None) -> None:
         device_support_path = Path('~/Library/Developer/Xcode/iOS DeviceSupport').expanduser()
         device_support_path /= (f'{self.build_manifest.supported_product_types[0]} '
                                 f'{self.build_manifest.product_version} ({self.build_manifest.product_build_version})')
         build_identity = self.build_manifest.build_identities[0]
         symbols_path = device_support_path / 'Symbols'
-        build_identity.extract_dsc(symbols_path)
+        build_identity.extract_dsc(symbols_path, pem_db=pem_db)
         for file in (symbols_path / 'private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld').iterdir():
             file.unlink()
         (device_support_path / 'Info.plist').write_bytes(plistlib.dumps({
