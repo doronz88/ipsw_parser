@@ -4,7 +4,6 @@ import zipfile
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import List
 
 from cached_property import cached_property
 from construct import Const, Default, PaddedString, Struct

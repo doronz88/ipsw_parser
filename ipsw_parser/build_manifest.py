@@ -1,5 +1,4 @@
 import plistlib
-from typing import List
 
 from cached_property import cached_property
 
