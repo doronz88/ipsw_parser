@@ -3,7 +3,7 @@ import shutil
 from collections import UserDict
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import List, Mapping, Optional
+from typing import Optional
 
 from cached_property import cached_property
 from plumbum import ProcessExecutionError, local
@@ -85,7 +85,7 @@ class BuildIdentity(UserDict):
         return self['Info'].get('MacOSVariant')
 
     @cached_property
-    def manifest(self) -> Mapping:
+    def manifest(self) -> dict:
         return self['Manifest']
 
     @cached_property
@@ -101,7 +101,7 @@ class BuildIdentity(UserDict):
     def get_component(self, name: str, **args) -> Component:
         return Component(self, name, **args)
 
-    def populate_tss_request_parameters(self, parameters: Mapping, additional_keys: List[str] = None):
+    def populate_tss_request_parameters(self, parameters: dict, additional_keys: Optional[list[str]] = None) -> None:
         """ equivalent to idevicerestore:tss_parameters_add_from_manifest """
         key_list = ['ApBoardID', 'ApChipID']
         if additional_keys is None:
