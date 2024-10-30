@@ -1,5 +1,4 @@
 import plistlib
-from typing import List
 
 from cached_property import cached_property
 
@@ -15,7 +14,7 @@ class BuildManifest:
 
     @cached_property
     def build_major(self) -> int:
-        build_major = str()
+        build_major = ''
         for i in self._manifest['ProductBuildVersion']:
             if i.isdigit():
                 build_major += i
@@ -25,7 +24,7 @@ class BuildManifest:
         return int(build_major)
 
     @cached_property
-    def supported_product_types(self) -> List[str]:
+    def supported_product_types(self) -> list[str]:
         return self._manifest['SupportedProductTypes']
 
     @cached_property

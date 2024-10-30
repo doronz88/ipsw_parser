@@ -4,7 +4,6 @@ import zipfile
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import List
 
 from cached_property import cached_property
 from construct import Const, Default, PaddedString, Struct
@@ -45,7 +44,7 @@ class IPSW:
         return self.read('SystemVersion.plist')
 
     @cached_property
-    def filelist(self) -> List[zipfile.ZipInfo]:
+    def filelist(self) -> list[zipfile.ZipInfo]:
         return self.archive.filelist
 
     @contextmanager
@@ -105,7 +104,7 @@ class IPSW:
     def get_firmware(self, firmware_path: str) -> Firmware:
         return Firmware(firmware_path, self)
 
-    def get_development_files(self) -> List[str]:
+    def get_development_files(self) -> list[str]:
         result = []
         for entry in self.archive.namelist():
             for release in ('devel', 'kasan', 'research'):

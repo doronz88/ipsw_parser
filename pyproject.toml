@@ -2,7 +2,7 @@
 name = "ipsw-parser"
 description = "python3 utility for parsing and extracting data from IPSW"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { file = "LICENSE" }
 keywords = ["ios", "cli", "firmware", "ipsw"]
 authors = [
@@ -15,13 +15,14 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
 ]
-dynamic = ["dependencies","version"]
+dynamic = ["dependencies", "version"]
 
 [project.optional-dependencies]
 test = ["pytest"]
@@ -38,7 +39,7 @@ exclude = ["docs*", "tests*"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
-version = {attr = "ipsw_parser._version.__version__"}
+version = { attr = "ipsw_parser._version.__version__" }
 
 [tool.setuptools_scm]
 version_file = "ipsw_parser/_version.py"
