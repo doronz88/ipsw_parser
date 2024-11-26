@@ -158,6 +158,18 @@ class BuildIdentity(UserDict):
                      sub_path=Path('System'), pem_db=pem_db)
         _split_dsc(output)
 
+    def get_kernelcache_payload(self, arch: Optional[str] = None) -> bytes:
+        im4p = IM4P(self.build_manifest.build_identities[0].get_component('KernelCache').data)
+        im4p.payload.decompress()
+        payload = im4p.payload.output().data
+        if arch is None:
+            return payload
+
+        with TemporaryDirectory() as temp_dir:
+            kernel_output = Path(temp_dir) / 'kernel'
+            local['ipsw']('macho', 'lipo', '-a', arch, kernel_output)
+            return Path(next(kernel_output.parent.glob(f'*.{arch}'))).read_bytes()
+
     def extract(self, output: Path, pem_db: Optional[str] = None) -> None:
         logger.info(f'extracting into: {output}')
 

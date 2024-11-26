@@ -5,3 +5,4 @@ cached_property
 plumbum
 pyimg4>=0.8.6
 requests
+remotezip2
