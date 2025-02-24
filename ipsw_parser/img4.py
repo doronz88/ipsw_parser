@@ -1,7 +1,6 @@
 import logging
 
-import pyimg4
-from pyimg4 import IM4P
+from pyimg4 import IM4P, IM4R, IMG4, RestoreProperty
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +131,7 @@ def stitch_component(name: str, im4p_data: bytes, tss):
 
     im4r = None
     if tbm_dict is not None:
-        im4r = pyimg4.IM4R()
+        im4r = IM4R()
         for key in tbm_dict.keys():
-            im4r.add_property(pyimg4.RestoreProperty(fourcc=key, value=tbm_dict[key]))
-    return pyimg4.IMG4(im4p=im4p, im4m=tss.ap_img4_ticket, im4r=im4r).output()
+            im4r.add_property(RestoreProperty(fourcc=key, value=tbm_dict[key]))
+    return IMG4(im4p=im4p, im4m=tss.ap_img4_ticket, im4r=im4r).output()
