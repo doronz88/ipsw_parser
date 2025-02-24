@@ -132,6 +132,16 @@ def stitch_component(name: str, im4p_data: bytes, tss):
     im4r = None
     if tbm_dict is not None:
         im4r = IM4R()
+        if tss.get('RequiresNonceSlot', False) and name in ('SEP', 'SepStage1', 'LLB'):
+            if name in ('SEP', 'SepStage1'):
+                im4r.add_property(
+                    RestoreProperty(fourcc='snid', value=tss.get('SepNonceSlotID', 2))
+                )
+            else:
+                im4r.add_property(
+                    RestoreProperty(fourcc='anid', value=tss.get('ApNonceSlotID', 0))
+                )
+
         for key in tbm_dict.keys():
             im4r.add_property(RestoreProperty(fourcc=key, value=tbm_dict[key]))
     return IMG4(im4p=im4p, im4m=tss.ap_img4_ticket, im4r=im4r).output()
