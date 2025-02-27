@@ -4,7 +4,6 @@ import os.path
 from cached_property import cached_property
 
 from ipsw_parser.exceptions import IpswException
-from ipsw_parser.img4 import stitch_component
 
 
 class TSSResponse(dict):
@@ -64,11 +63,3 @@ class Component:
             self.logger.debug(f'Extracting {os.path.basename(self.path)} ({self.path})')
             return self.build_identity.build_manifest.ipsw.read(self.path)
         return self._data
-
-    @cached_property
-    def personalized_data(self):
-        if self._tss is None:
-            raise IpswException(f'TSS ticket must be supplied for personalizing component: {self.name}')
-
-        # stitch ApImg4Ticket into IMG4 file
-        return stitch_component(self.name, self.data, self._tss)
