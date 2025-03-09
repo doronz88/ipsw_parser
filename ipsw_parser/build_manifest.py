@@ -34,6 +34,8 @@ class BuildManifest:
             return 'iBridge'
         elif product.startswith('iPhone'):
             return 'iPhone'
+        elif 'Mac' in product:
+            return 'Mac'
         else:
             raise ValueError()
 
