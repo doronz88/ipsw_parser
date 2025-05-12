@@ -145,6 +145,7 @@ class BuildIdentity(UserDict):
         kernel_component = build_identity.get_component('KernelCache')
         kernel_path = Path(kernel_component.path)
         kernel_output = output / 'System/Library/Caches/com.apple.kernelcaches' / kernel_path.parts[-1]
+        kernel_output.parent.mkdir(parents=True, exist_ok=True)
 
         logger.info(f'extracting kernel into: {kernel_output}')
         im4p = IM4P(kernel_component.data)
