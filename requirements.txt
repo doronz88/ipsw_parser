@@ -3,6 +3,6 @@ click
 coloredlogs
 cached_property
 plumbum
-pyimg4>=0.8.6
+pyimg4>=0.8.8
 requests
 remotezip2
