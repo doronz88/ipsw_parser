@@ -34,4 +34,4 @@ jobs:
           python -m pip install -U .
       - name: Test show usage
         run: |
-          python -m ipsw_parser
+          python -m ipsw_parser --help
