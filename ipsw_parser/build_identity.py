@@ -1,9 +1,11 @@
 import logging
+import os
 import shutil
 from collections import UserDict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Optional
+from zipfile import ZipFile
 
 import requests
 from cached_property import cached_property
@@ -14,8 +16,17 @@ from ipsw_parser.component import Component
 
 logger = logging.getLogger(__name__)
 
+AEA_MAGIC = b'AEA1'
 
-def _extract_dmg(buf: bytes, output: Path, sub_path: Optional[Path] = None, pem_db: Optional[str] = None) -> None:
+
+def extract_as(zipf: ZipFile, member_name, output_path, chunk_size=64 * 1024):
+    """Extract a single member from a ZIP archive to a custom output path"""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with zipf.open(member_name) as source, open(output_path, 'wb') as target:
+        shutil.copyfileobj(source, target, length=chunk_size)
+
+
+def _extract_dmg(dmg: Path, output: Path, sub_path: Optional[Path] = None, pem_db: Optional[str] = None) -> None:
     ipsw = local['ipsw']
     hdiutil = local['hdiutil']
     # darwin system statistically have problems cleaning up after detaching the mountpoint
@@ -23,13 +34,15 @@ def _extract_dmg(buf: bytes, output: Path, sub_path: Optional[Path] = None, pem_
         temp_dir = Path(temp_dir)
         mnt = temp_dir / 'mnt'
         mnt.mkdir()
-        dmg = temp_dir / 'image.dmg'
 
-        if buf.startswith(b'AEA1'):
+        with dmg.open('rb') as f:
+            magic = f.read(len(AEA_MAGIC))
+        if magic == AEA_MAGIC:
             logger.debug('Found Apple Encrypted Archive. Decrypting...')
-            dmg_aea = Path(str(dmg) + '.aea')
-            dmg_aea.write_bytes(buf)
-            args = ['fw', 'aea', dmg_aea, '-o', temp_dir]
+            aea_dmg = str(dmg.absolute()) + '.aea'
+            dmg.rename(aea_dmg)
+            dmg = temp_dir / Path(aea_dmg).name.rsplit('.', 1)[0]
+            args = ['fw', 'aea', aea_dmg, '-o', temp_dir]
             if pem_db is not None:
                 if '://' in pem_db:
                     # create a local file containing it
@@ -38,8 +51,6 @@ def _extract_dmg(buf: bytes, output: Path, sub_path: Optional[Path] = None, pem_
                     pem_db = temp_pem_db
                 args += ['--pem-db', pem_db]
             ipsw(args)
-        else:
-            dmg.write_bytes(buf)
 
         hdiutil('attach', '-mountpoint', mnt, dmg)
 
@@ -118,8 +129,12 @@ class BuildIdentity(UserDict):
         device_support_symbols_path = output / 'private/preboot/Cryptexes/OS/System'
         device_support_symbols_path.mkdir(parents=True, exist_ok=True)
 
-        _extract_dmg(build_identity.get_component('Cryptex1,SystemOS').data, device_support_symbols_path,
-                     sub_path=Path('System'), pem_db=pem_db)
+        with TemporaryDirectory() as temp_dir:
+            system_os = Path(temp_dir) / 'system_os.dmg'
+            system_os_component_path = build_identity.get_component_path('Cryptex1,SystemOS')
+            extract_as(self.build_manifest.ipsw.archive, system_os_component_path, system_os)
+            _extract_dmg(system_os, device_support_symbols_path,
+                         sub_path=Path('System'), pem_db=pem_db)
         _split_dsc(output)
 
     def get_kernelcache_payload(self, arch: Optional[str] = None) -> bytes:
@@ -140,7 +155,11 @@ class BuildIdentity(UserDict):
         build_identity = self.build_manifest.build_identities[0]
 
         logger.info(f'extracting OS into: {output}')
-        _extract_dmg(build_identity.get_component('OS').data, output, pem_db=pem_db)
+        with TemporaryDirectory() as temp_dir:
+            os_dmg = Path(temp_dir) / 'os.dmg'
+            os_component_path = build_identity.get_component_path('OS')
+            extract_as(self.build_manifest.ipsw.archive, os_component_path, os_dmg)
+            _extract_dmg(os_dmg, output, pem_db=pem_db)
 
         kernel_component = build_identity.get_component('KernelCache')
         kernel_path = Path(kernel_component.path)
@@ -171,6 +190,10 @@ class BuildIdentity(UserDict):
             cryptex_path.mkdir(parents=True, exist_ok=True)
 
             logger.info(f'extracting {name} into: {cryptex_path}')
-            _extract_dmg(build_identity.get_component(name).data, cryptex_path, pem_db=pem_db)
+            with TemporaryDirectory() as temp_dir:
+                temp_component = (Path(temp_dir) / name).with_suffix('.dmg')
+                component_path = build_identity.get_component_path(name)
+                extract_as(self.build_manifest.ipsw.archive, component_path, temp_component)
+                _extract_dmg(temp_component, cryptex_path, pem_db=pem_db)
 
         _split_dsc(output)
