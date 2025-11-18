@@ -1,8 +1,6 @@
 import logging
-import plistlib
 import zipfile
 from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -10,6 +8,7 @@ from cached_property import cached_property
 from construct import Const, Default, PaddedString, Struct
 
 from ipsw_parser.build_manifest import BuildManifest
+from ipsw_parser.dsc import create_device_support_layout
 from ipsw_parser.firmware import Firmware
 
 logger = logging.getLogger(__name__)
@@ -119,14 +118,10 @@ class IPSW:
                                 f'{self.build_manifest.product_version} ({self.build_manifest.product_build_version})')
         build_identity = self.build_manifest.build_identities[0]
         symbols_path = device_support_path / 'Symbols'
-        build_identity.extract_dsc(symbols_path, pem_db=pem_db)
-        for file in (symbols_path / 'private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld').iterdir():
-            file.unlink()
-        (device_support_path / 'Info.plist').write_bytes(plistlib.dumps({
-            'DSC Extractor Version': '1228.0.0.0.0',
-            'DateCollected': datetime.now(),
-            'Version': '16.0',
-        }))
-        (device_support_path / '.finalized').write_bytes(plistlib.dumps({}))
-        (device_support_path / '.processed_dyld_shared_cache_arm64e').touch()
-        (device_support_path / '.processing_lock').touch()
+        build_identity.extract_dsc(symbols_path, pem_db=pem_db, split=False)
+        create_device_support_layout(
+            self.build_manifest.supported_product_types[0],
+            self.build_manifest.product_version,
+            self.build_manifest.product_build_version,
+            symbols_path
+        )

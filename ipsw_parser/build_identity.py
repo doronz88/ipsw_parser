@@ -13,6 +13,7 @@ from plumbum import ProcessExecutionError, local
 from pyimg4 import IM4P
 
 from ipsw_parser.component import Component
+from ipsw_parser.dsc import split_dsc
 
 logger = logging.getLogger(__name__)
 
@@ -67,22 +68,6 @@ def _extract_dmg(dmg: Path, output: Path, sub_path: Optional[Path] = None, pem_d
         hdiutil('detach', '-force', mnt)
 
 
-def _split_dsc(root: Path) -> None:
-    ipsw = local['ipsw']
-    dsc_paths = [
-        root / 'System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64',
-        root / 'System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e',
-        root / 'private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64',
-        root / 'private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e']
-
-    for dsc in dsc_paths:
-        if not dsc.exists():
-            continue
-
-        logger.info(f'splitting DSC: {dsc}')
-        ipsw('dyld', 'split', dsc, '-o', root)
-
-
 class BuildIdentity(UserDict):
     def __init__(self, build_manifest, data):
         super().__init__(data)
@@ -121,7 +106,7 @@ class BuildIdentity(UserDict):
     def get_component(self, name: str, **args) -> Component:
         return Component(self, name, **args)
 
-    def extract_dsc(self, output: Path, pem_db: Optional[str] = None) -> None:
+    def extract_dsc(self, output: Path, pem_db: Optional[str] = None, split: bool = True) -> None:
         build_identity = self.build_manifest.build_identities[0]
         if not build_identity.has_component('Cryptex1,SystemOS'):
             return
@@ -135,7 +120,8 @@ class BuildIdentity(UserDict):
             extract_as(self.build_manifest.ipsw.archive, system_os_component_path, system_os)
             _extract_dmg(system_os, device_support_symbols_path,
                          sub_path=Path('System'), pem_db=pem_db)
-        _split_dsc(output)
+        if split:
+            split_dsc(output)
 
     def get_kernelcache_payload(self, arch: Optional[str] = None) -> bytes:
         im4p = IM4P(self.build_manifest.build_identities[0].get_component('KernelCache').data)
@@ -196,4 +182,4 @@ class BuildIdentity(UserDict):
                 extract_as(self.build_manifest.ipsw.archive, component_path, temp_component)
                 _extract_dmg(temp_component, cryptex_path, pem_db=pem_db)
 
-        _split_dsc(output)
+        split_dsc(output)
