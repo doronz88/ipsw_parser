@@ -8,6 +8,7 @@ import click
 import coloredlogs
 from remotezip2 import RemoteZip
 
+from ipsw_parser.archive import DirectoryArchive, ZipArchive
 from ipsw_parser.ipsw import IPSW
 
 coloredlogs.install(level=logging.DEBUG)
@@ -27,8 +28,13 @@ PEM_DB_ENV_VAR = "IPSW_PARSER_PEM_DB"
 
 def handle_ipsw_argument(ctx: click.Context, param: click.Argument, value: str) -> IPSW:
     if value.startswith("http://") or value.startswith("https://"):
-        return IPSW(RemoteZip(value))
-    return IPSW(ZipFile(Path(value).expanduser()))
+        return IPSW(ZipArchive(RemoteZip(value)))
+
+    path = Path(value).expanduser()
+    if path.is_dir():
+        return IPSW(DirectoryArchive(path))
+
+    return IPSW(ZipArchive(ZipFile(path)))
 
 
 ipsw_argument = click.argument("ipsw", callback=handle_ipsw_argument)

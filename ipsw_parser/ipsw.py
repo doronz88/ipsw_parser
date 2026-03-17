@@ -1,12 +1,12 @@
 import logging
-import zipfile
 from contextlib import contextmanager
+from functools import cached_property
 from pathlib import Path
 from typing import Optional
 
-from cached_property import cached_property
 from construct import Const, Default, PaddedString, Struct
 
+from ipsw_parser.archive import Archive, ArchiveMember
 from ipsw_parser.build_manifest import BuildManifest
 from ipsw_parser.dsc import create_device_support_layout
 from ipsw_parser.firmware import Firmware
@@ -33,7 +33,7 @@ cpio_odc_header = Struct(
 
 
 class IPSW:
-    def __init__(self, archive: zipfile.ZipFile):
+    def __init__(self, archive: Archive):
         self.archive = archive
         self._logger = logging.getLogger(__file__)
         self.build_manifest = BuildManifest(
@@ -52,7 +52,7 @@ class IPSW:
         return self.read("SystemVersion.plist")
 
     @cached_property
-    def filelist(self) -> list[zipfile.ZipInfo]:
+    def filelist(self) -> list[ArchiveMember]:
         return self.archive.filelist
 
     @contextmanager
