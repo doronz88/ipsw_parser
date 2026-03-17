@@ -1,7 +1,7 @@
 construct>=2.9.29
-click
 coloredlogs
 plumbum
 pyimg4>=0.8.8
 requests
 remotezip2
+typer
