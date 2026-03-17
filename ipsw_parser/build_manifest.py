@@ -1,7 +1,6 @@
 import plistlib
+from functools import cached_property
 from typing import Optional
-
-from cached_property import cached_property
 
 from ipsw_parser.build_identity import BuildIdentity
 from ipsw_parser.exceptions import NoSuchBuildIdentityError

@@ -1,12 +1,14 @@
 import logging
-import zipfile
 from contextlib import contextmanager
+from functools import cached_property
 from pathlib import Path
 from typing import Optional
+from zipfile import ZipFile
 
-from cached_property import cached_property
 from construct import Const, Default, PaddedString, Struct
+from remotezip2 import RemoteZip
 
+from ipsw_parser.archive import Archive, ArchiveMember, DirectoryArchive, ZipArchive
 from ipsw_parser.build_manifest import BuildManifest
 from ipsw_parser.dsc import create_device_support_layout
 from ipsw_parser.firmware import Firmware
@@ -33,7 +35,18 @@ cpio_odc_header = Struct(
 
 
 class IPSW:
-    def __init__(self, archive: zipfile.ZipFile):
+    @classmethod
+    def create_from_path(cls, value: str) -> "IPSW":
+        if value.startswith("http://") or value.startswith("https://"):
+            return cls(ZipArchive(RemoteZip(value)))
+
+        path = Path(value).expanduser()
+        if path.is_dir():
+            return cls(DirectoryArchive(path))
+
+        return cls(ZipArchive(ZipFile(path)))
+
+    def __init__(self, archive: Archive):
         self.archive = archive
         self._logger = logging.getLogger(__file__)
         self.build_manifest = BuildManifest(
@@ -52,7 +65,7 @@ class IPSW:
         return self.read("SystemVersion.plist")
 
     @cached_property
-    def filelist(self) -> list[zipfile.ZipInfo]:
+    def filelist(self) -> list[ArchiveMember]:
         return self.archive.filelist
 
     @contextmanager

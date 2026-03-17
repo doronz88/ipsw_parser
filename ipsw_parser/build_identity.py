@@ -2,16 +2,16 @@ import logging
 import os
 import shutil
 from collections import UserDict
+from functools import cached_property
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Optional
-from zipfile import ZipFile
 
 import requests
-from cached_property import cached_property
 from plumbum import ProcessExecutionError, local
 from pyimg4 import IM4P
 
+from ipsw_parser.archive import Archive
 from ipsw_parser.component import Component
 from ipsw_parser.dsc import split_dsc
 
@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 AEA_MAGIC = b"AEA1"
 
 
-def extract_as(zipf: ZipFile, member_name, output_path, chunk_size=64 * 1024):
+def extract_as(archive: Archive, member_name, output_path, chunk_size=64 * 1024):
     """Extract a single member from a ZIP archive to a custom output path"""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with zipf.open(member_name) as source, open(output_path, "wb") as target:
+    with archive.open(member_name) as source, open(output_path, "wb") as target:
         shutil.copyfileobj(source, target, length=chunk_size)
 
 

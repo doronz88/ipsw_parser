@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 import logging
 from pathlib import Path
-from typing import Optional
-from zipfile import ZipFile
+from typing import Annotated, Optional
 
-import click
 import coloredlogs
-from remotezip2 import RemoteZip
+import typer
 
 from ipsw_parser.ipsw import IPSW
 
@@ -24,37 +22,33 @@ logger = logging.getLogger(__name__)
 
 PEM_DB_ENV_VAR = "IPSW_PARSER_PEM_DB"
 
-
-def handle_ipsw_argument(ctx: click.Context, param: click.Argument, value: str) -> IPSW:
-    if value.startswith("http://") or value.startswith("https://"):
-        return IPSW(RemoteZip(value))
-    return IPSW(ZipFile(Path(value).expanduser()))
-
-
-ipsw_argument = click.argument("ipsw", callback=handle_ipsw_argument)
-pem_db_option = click.option(
-    "--pem-db",
-    envvar=PEM_DB_ENV_VAR,
-    help="Path DB file url (can be either a filesystem path or an HTTP URL). "
-    "Alternatively, use the IPSW_PARSER_PEM_DB envvar.",
+cli = typer.Typer(
+    help="CLI utility for extracting info from IPSW files",
 )
 
-
-@click.group()
-def cli() -> None:
-    """CLI utility for extracting info from IPSW files"""
-    pass
+IpswArgument = Annotated[str, typer.Argument(help="Path to an IPSW zip, extracted IPSW directory, or HTTP URL.")]
+OutputArgument = Annotated[Path, typer.Argument(help="Output path.", exists=False)]
+PemDbOption = Annotated[
+    Optional[str],
+    typer.Option(
+        "--pem-db",
+        envvar=PEM_DB_ENV_VAR,
+        help="Path DB file url (can be either a filesystem path or an HTTP URL). "
+        "Alternatively, use the IPSW_PARSER_PEM_DB envvar.",
+    ),
+]
+ArchOption = Annotated[Optional[str], typer.Option(help="Arch name to extract using lipo")]
 
 
 @cli.command("info")
-@ipsw_argument
-def info(ipsw) -> None:
+def info(ipsw: IpswArgument) -> None:
     """Parse given .ipsw basic info"""
-    print(f"SupportedProductTypes: {ipsw.build_manifest.supported_product_types}")
-    print(f"ProductVersion: {ipsw.build_manifest.product_version}")
-    print(f"ProductBuildVersion: {ipsw.build_manifest.product_build_version}")
+    parsed_ipsw = IPSW.create_from_path(ipsw)
+    print(f"SupportedProductTypes: {parsed_ipsw.build_manifest.supported_product_types}")
+    print(f"ProductVersion: {parsed_ipsw.build_manifest.product_version}")
+    print(f"ProductBuildVersion: {parsed_ipsw.build_manifest.product_build_version}")
 
-    development_files = ipsw.get_development_files()
+    development_files = parsed_ipsw.get_development_files()
     if development_files:
         print("DevelopmentFiles:")
         for file in development_files:
@@ -62,37 +56,30 @@ def info(ipsw) -> None:
 
 
 @cli.command("extract")
-@ipsw_argument
-@click.argument("output", type=click.Path(exists=False))
-@pem_db_option
-def extract(ipsw: IPSW, output: str, pem_db: Optional[str]) -> None:
+def extract(ipsw: IpswArgument, output: OutputArgument, pem_db: PemDbOption = None) -> None:
     """Extract .ipsw into filesystem layout"""
-    output = Path(output)
+    parsed_ipsw = IPSW.create_from_path(ipsw)
 
     if not output.exists():
         output.mkdir(parents=True, exist_ok=True)
 
-    ipsw.build_manifest.build_identities[0].extract(output, pem_db=pem_db)
-    ipsw.archive.extractall(
-        path=output, members=[f for f in ipsw.archive.filelist if f.filename.startswith("Firmware")]
+    parsed_ipsw.build_manifest.build_identities[0].extract(output, pem_db=pem_db)
+    parsed_ipsw.archive.extractall(
+        path=output, members=[f for f in parsed_ipsw.archive.filelist if f.filename.startswith("Firmware")]
     )
 
 
 @cli.command("extract-kernel")
-@ipsw_argument
-@click.argument("output", type=click.Path(exists=False))
-@click.option("--arch", help="Arch name to extract using lipo")
-def extract_kernel(ipsw: IPSW, output: str, arch: Optional[str]) -> None:
+def extract_kernel(ipsw: IpswArgument, output: OutputArgument, arch: ArchOption = None) -> None:
     """Extract kernelcache from given .ipsw into given output filename"""
-    Path(output).write_bytes(ipsw.build_manifest.build_identities[0].get_kernelcache_payload(arch=arch))
+    parsed_ipsw = IPSW.create_from_path(ipsw)
+    output.write_bytes(parsed_ipsw.build_manifest.build_identities[0].get_kernelcache_payload(arch=arch))
 
 
 @cli.command("device-support")
-@ipsw_argument
-@pem_db_option
-def device_support(ipsw: IPSW, pem_db: Optional[str]) -> None:
+def device_support(ipsw: IpswArgument, pem_db: PemDbOption = None) -> None:
     """Create DeviceSupport directory"""
-    ipsw.create_device_support(pem_db=pem_db)
+    IPSW.create_from_path(ipsw).create_device_support(pem_db=pem_db)
 
 
 if __name__ == "__main__":
