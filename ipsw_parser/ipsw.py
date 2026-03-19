@@ -36,25 +36,29 @@ cpio_odc_header = Struct(
 
 class IPSW:
     @classmethod
-    def create_from_path(cls, value: str) -> "IPSW":
+    def create_from_path(cls, value: str, build_manifest_name: Optional[str] = None) -> "IPSW":
         if value.startswith("http://") or value.startswith("https://"):
-            return cls(ZipArchive(RemoteZip(value)))
+            return cls(ZipArchive(RemoteZip(value)), build_manifest_name=build_manifest_name)
 
         path = Path(value).expanduser()
         if path.is_dir():
-            return cls(DirectoryArchive(path))
+            return cls(DirectoryArchive(path), build_manifest_name=build_manifest_name)
 
-        return cls(ZipArchive(ZipFile(path)))
+        return cls(ZipArchive(ZipFile(path)), build_manifest_name=build_manifest_name)
 
-    def __init__(self, archive: Archive):
+    def __init__(self, archive: Archive, build_manifest_name: Optional[str] = None):
         self.archive = archive
         self._logger = logging.getLogger(__file__)
         self.build_manifest = BuildManifest(
             self,
-            self.archive.read(
-                next(f for f in self.archive.namelist() if f.startswith("BuildManifest") and f.endswith(".plist"))
-            ),
+            self.archive.read(self._get_build_manifest_path(build_manifest_name)),
         )
+
+    def _get_build_manifest_path(self, build_manifest_name: Optional[str]) -> str:
+        if build_manifest_name is not None:
+            return build_manifest_name
+
+        return next(f for f in self.archive.namelist() if f.startswith("BuildManifest") and f.endswith(".plist"))
 
     @cached_property
     def restore_version(self) -> bytes:

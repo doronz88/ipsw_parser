@@ -15,15 +15,15 @@ def _build_manifest() -> bytes:
     })
 
 
-def _write_ipsw_layout(root: Path) -> None:
-    (root / "BuildManifest.plist").write_bytes(_build_manifest())
+def _write_ipsw_layout(root: Path, manifest_name: str = "BuildManifest.plist", manifest: Optional[bytes] = None) -> None:
+    (root / manifest_name).write_bytes(manifest or _build_manifest())
     (root / "RestoreVersion.plist").write_bytes(b"restore-version")
     (root / "SystemVersion.plist").write_bytes(b"system-version")
     firmware = root / "Firmware"
-    firmware.mkdir()
+    firmware.mkdir(exist_ok=True)
     (firmware / "devel-file.bin").write_bytes(b"dev")
     release = root / "Release"
-    release.mkdir()
+    release.mkdir(exist_ok=True)
     (release / "normal-file.bin").write_bytes(b"release")
 
 
@@ -54,6 +54,46 @@ def test_zip_archive_supports_same_ipsw_behavior(tmp_path: Path) -> None:
         assert ipsw.build_manifest.product_build_version == "1A1"
         assert ipsw.restore_version == b"restore-version"
         assert ipsw.get_development_files() == ["Firmware/devel-file.bin"]
+
+
+def test_directory_archive_accepts_explicit_build_manifest_name(tmp_path: Path) -> None:
+    _write_ipsw_layout(tmp_path, manifest_name="BuildManifest_A.plist", manifest=_build_manifest())
+    _write_ipsw_layout(
+        tmp_path,
+        manifest_name="BuildManifest_B.plist",
+        manifest=plistlib.dumps({
+            "SupportedProductTypes": ["iPhone2,1"],
+            "ProductVersion": "2.0",
+            "ProductBuildVersion": "2B2",
+            "BuildIdentities": [],
+        }),
+    )
+
+    ipsw = IPSW(DirectoryArchive(tmp_path), build_manifest_name="BuildManifest_B.plist")
+
+    assert ipsw.build_manifest.product_version == "2.0"
+    assert ipsw.build_manifest.product_build_version == "2B2"
+    assert ipsw.build_manifest.supported_product_types == ["iPhone2,1"]
+
+
+def test_create_from_path_accepts_explicit_build_manifest_name(tmp_path: Path) -> None:
+    _write_ipsw_layout(tmp_path, manifest_name="BuildManifest_A.plist", manifest=_build_manifest())
+    _write_ipsw_layout(
+        tmp_path,
+        manifest_name="BuildManifest_B.plist",
+        manifest=plistlib.dumps({
+            "SupportedProductTypes": ["iPhone2,1"],
+            "ProductVersion": "2.0",
+            "ProductBuildVersion": "2B2",
+            "BuildIdentities": [],
+        }),
+    )
+
+    ipsw = IPSW.create_from_path(str(tmp_path), build_manifest_name="BuildManifest_B.plist")
+
+    assert ipsw.build_manifest.product_version == "2.0"
+    assert ipsw.build_manifest.product_build_version == "2B2"
+    assert ipsw.build_manifest.supported_product_types == ["iPhone2,1"]
 
 
 def test_directory_extractall_copies_requested_members(tmp_path: Path) -> None:
