@@ -76,6 +76,17 @@ def extract_kernel(ipsw: IpswArgument, output: OutputArgument, arch: ArchOption 
     output.write_bytes(parsed_ipsw.build_manifest.build_identities[0].get_kernelcache_payload(arch=arch))
 
 
+@cli.command("extract-sandbox-profiles")
+def extract_sandbox_profiles(ipsw: IpswArgument, output: OutputArgument) -> None:
+    """Extract decoded sandbox profiles into the output directory."""
+    parsed_ipsw = IPSW.create_from_path(ipsw)
+
+    if not output.exists():
+        output.mkdir(parents=True, exist_ok=True)
+
+    parsed_ipsw.build_manifest.build_identities[0].extract_sandbox_profiles(output)
+
+
 @cli.command("device-support")
 def device_support(ipsw: IpswArgument, pem_db: PemDbOption = None) -> None:
     """Create DeviceSupport directory"""

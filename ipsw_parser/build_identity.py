@@ -65,6 +65,47 @@ def _extract_dmg(dmg: Path, output: Path, sub_path: Optional[Path] = None, pem_d
         hdiutil("detach", "-force", mnt)
 
 
+def _decode_sandbox_profiles(kernel_output: Path, output: Path, profile_type: Optional[str] = None) -> None:
+    ipsw = local["ipsw"]
+    args = ["sb", "list", kernel_output]
+    if profile_type is not None:
+        args += ["--type", profile_type]
+
+    output.mkdir(exist_ok=True, parents=True)
+
+    for profile_name in ipsw(*args).splitlines():
+        profile_path = (output / profile_name).with_suffix(".sb")
+        decode_args = ["sb", "dec", kernel_output, profile_name]
+        if profile_type is not None:
+            decode_args += ["--type", profile_type]
+        try:
+            profile = ipsw(*decode_args)
+        except ProcessExecutionError as e:
+            logger.warning(f"failed to decode sandbox profile {profile_name}: {e}")
+            continue
+        profile_path.write_text(profile)
+
+
+def _extract_kernelcache(build_identity: "BuildIdentity", output: Path) -> Path:
+    kernel_component = build_identity.get_component("KernelCache")
+    kernel_path = Path(kernel_component.path)
+    kernel_output = output / kernel_path.parts[-1]
+    output.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"extracting kernel into: {kernel_output}")
+    im4p = IM4P(kernel_component.data)
+    im4p.payload.decompress()
+    kernel_output.write_bytes(im4p.payload.output().data)
+    try:
+        # In case the kernel is a FAT image, extract the arm64 macho
+        local["ipsw"]("macho", "lipo", "-a", "arm64", kernel_output)
+        next(iter(kernel_output.parent.glob("*.arm64"))).rename(kernel_output)
+    except ProcessExecutionError:
+        pass
+
+    return kernel_output
+
+
 class BuildIdentity(UserDict):
     def __init__(self, build_manifest, data):
         super().__init__(data)
@@ -131,6 +172,14 @@ class BuildIdentity(UserDict):
             local["ipsw"]("macho", "lipo", "-a", arch, kernel_output)
             return Path(next(kernel_output.parent.glob(f"*.{arch}"))).read_bytes()
 
+    def extract_sandbox_profiles(self, output: Path) -> None:
+        """Decode normal and protobox sandbox profiles into ``output``."""
+        output.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory() as temp_dir:
+            kernel_output = _extract_kernelcache(self, Path(temp_dir))
+            _decode_sandbox_profiles(kernel_output, output)
+            _decode_sandbox_profiles(kernel_output, output / "protobox", profile_type="protobox")
+
     def extract(self, output: Path, pem_db: Optional[str] = None) -> None:
         logger.info(f"extracting into: {output}")
 
@@ -143,21 +192,10 @@ class BuildIdentity(UserDict):
             extract_as(self.build_manifest.ipsw.archive, os_component_path, os_dmg)
             _extract_dmg(os_dmg, output, pem_db=pem_db)
 
-        kernel_component = build_identity.get_component("KernelCache")
-        kernel_path = Path(kernel_component.path)
-        kernel_output = output / "System/Library/Caches/com.apple.kernelcaches" / kernel_path.parts[-1]
-        kernel_output.parent.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"extracting kernel into: {kernel_output}")
-        im4p = IM4P(kernel_component.data)
-        im4p.payload.decompress()
-        kernel_output.write_bytes(im4p.payload.output().data)
-        try:
-            # In case the kernel is a FAT image, extract the arm64 macho
-            local["ipsw"]("macho", "lipo", "-a", "arm64", kernel_output)
-            next(iter(kernel_output.parent.glob("*.arm64"))).rename(kernel_output)
-        except ProcessExecutionError:
-            pass
+        kernel_output = _extract_kernelcache(self, output / "System/Library/Caches/com.apple.kernelcaches")
+        sandbox_profiles = output / "sandbox/profiles"
+        _decode_sandbox_profiles(kernel_output, sandbox_profiles)
+        _decode_sandbox_profiles(kernel_output, sandbox_profiles / "protobox", profile_type="protobox")
 
         for cryptex in ("App", "OS"):
             name = {
