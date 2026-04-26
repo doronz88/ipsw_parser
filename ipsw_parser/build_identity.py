@@ -159,6 +159,20 @@ class BuildIdentity(UserDict):
         except ProcessExecutionError:
             pass
 
+        sandbox_profiles = output / "sandbox/profiles"
+        sandbox_profiles.mkdir(exist_ok=True, parents=True)
+
+        for profile_name in local["ipsw"]("sb", "list", kernel_output).splitlines():
+            profile_path = (sandbox_profiles / profile_name).with_suffix(".sb")
+            profile_path.write_text(local["ipsw"]("sb", "dec", kernel_output, profile_name))
+
+        protobox_profiles = sandbox_profiles / "protobox"
+        protobox_profiles.mkdir(exist_ok=True, parents=True)
+
+        for profile_name in local["ipsw"]("sb", "list", kernel_output, "--type", "protobox").splitlines():
+            profile_path = (protobox_profiles / profile_name).with_suffix(".sb")
+            profile_path.write_text(local["ipsw"]("sb", "dec", kernel_output, profile_name, "--type", "protobox"))
+
         for cryptex in ("App", "OS"):
             name = {
                 "App": "Cryptex1,AppOS",
