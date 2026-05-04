@@ -35,8 +35,11 @@ cpio_odc_header = Struct(
 
 
 class IPSW:
+    """High-level interface for reading and extracting IPSW contents."""
+
     @classmethod
     def create_from_path(cls, value: str) -> "IPSW":
+        """Create an ``IPSW`` from a local path, extracted directory, or URL."""
         if value.startswith("http://") or value.startswith("https://"):
             return cls(ZipArchive(RemoteZip(value)))
 
@@ -47,6 +50,7 @@ class IPSW:
         return cls(ZipArchive(ZipFile(path)))
 
     def __init__(self, archive: Archive):
+        """Create an IPSW wrapper around an archive backend."""
         self.archive = archive
         self._logger = logging.getLogger(__file__)
         self.build_manifest = BuildManifest(
@@ -58,18 +62,22 @@ class IPSW:
 
     @cached_property
     def restore_version(self) -> bytes:
+        """Return the raw ``RestoreVersion.plist`` payload."""
         return self.read("RestoreVersion.plist")
 
     @cached_property
     def system_version(self) -> bytes:
+        """Return the raw ``SystemVersion.plist`` payload."""
         return self.read("SystemVersion.plist")
 
     @cached_property
     def filelist(self) -> list[ArchiveMember]:
+        """Return archive members for the IPSW."""
         return self.archive.filelist
 
     @contextmanager
     def open_path(self, path: str):
+        """Open an IPSW member and close it automatically on exit."""
         file = self.archive.open(path)
         try:
             yield file
@@ -78,6 +86,7 @@ class IPSW:
 
     @property
     def bootability(self) -> bytes:
+        """Build a cpio archive containing bootability bundle payloads."""
         result = b""
         prefix = "BootabilityBundle/Restore/Bootability/"
         inode = 1
@@ -126,16 +135,20 @@ class IPSW:
         return result
 
     def read(self, path: str) -> bytes:
+        """Read an IPSW member into memory."""
         return self.archive.read(path)
 
     def get_global_manifest(self, macos_variant: str, device_class: str) -> bytes:
+        """Return the restore manifest for a macOS variant and device class."""
         manifest_path = f"Firmware/Manifests/restore/{macos_variant}/apticket.{device_class}.im4m"
         return self.read(manifest_path)
 
     def get_firmware(self, firmware_path: str) -> Firmware:
+        """Return a firmware helper rooted at ``firmware_path``."""
         return Firmware(firmware_path, self)
 
     def get_development_files(self) -> list[str]:
+        """Return archive entries associated with development builds."""
         result = []
         for entry in self.archive.namelist():
             for release in ("devel", "kasan", "research"):
@@ -144,6 +157,7 @@ class IPSW:
         return result
 
     def create_device_support(self, pem_db: Optional[str] = None) -> None:
+        """Create an Xcode DeviceSupport directory for this IPSW."""
         device_support_path = Path("~/Library/Developer/Xcode/iOS DeviceSupport").expanduser()
         device_support_path /= (
             f"{self.build_manifest.supported_product_types[0]} "

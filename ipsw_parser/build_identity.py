@@ -21,7 +21,7 @@ AEA_MAGIC = b"AEA1"
 
 
 def extract_as(archive: Archive, member_name, output_path, chunk_size=64 * 1024):
-    """Extract a single member from a ZIP archive to a custom output path"""
+    """Extract one archive member into a caller-provided path."""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with archive.open(member_name) as source, open(output_path, "wb") as target:
         shutil.copyfileobj(source, target, length=chunk_size)
@@ -107,44 +107,57 @@ def _extract_kernelcache(build_identity: "BuildIdentity", output: Path) -> Path:
 
 
 class BuildIdentity(UserDict):
+    """Dictionary-backed wrapper for a single build identity."""
+
     def __init__(self, build_manifest, data):
+        """Wrap a single BuildIdentity entry from the manifest."""
         super().__init__(data)
         self.build_manifest = build_manifest
 
     @cached_property
     def device_class(self) -> str:
+        """Return the normalized device class for this build identity."""
         return self["Info"]["DeviceClass"].lower()
 
     @cached_property
     def restore_behavior(self) -> str:
+        """Return the restore behavior declared by the build identity."""
         return self["Info"].get("RestoreBehavior")
 
     @cached_property
     def variant(self):
+        """Return the variant string for this build identity."""
         return self["Info"].get("Variant")
 
     @cached_property
     def macos_variant(self) -> str:
+        """Return the macOS restore variant, if present."""
         return self["Info"].get("MacOSVariant")
 
     @cached_property
     def manifest(self) -> dict:
+        """Return the component manifest dictionary."""
         return self["Manifest"]
 
     @cached_property
     def minimum_system_partition(self):
+        """Return the minimum system partition requirement, if present."""
         return self["Info"].get("MinimumSystemPartition")
 
     def get_component_path(self, component: str) -> str:
+        """Return the archive path for a named component."""
         return self.manifest[component]["Info"]["Path"]
 
     def has_component(self, name: str) -> bool:
+        """Return whether the build identity contains a named component."""
         return name in self.manifest
 
     def get_component(self, name: str, **args) -> Component:
+        """Return a component wrapper for a named manifest entry."""
         return Component(self, name, **args)
 
     def extract_dsc(self, output: Path, pem_db: Optional[str] = None, split: bool = True) -> None:
+        """Extract the system cryptex DSC payloads into ``output``."""
         build_identity = self.build_manifest.build_identities[0]
         if not build_identity.has_component("Cryptex1,SystemOS"):
             return
@@ -161,6 +174,7 @@ class BuildIdentity(UserDict):
             split_dsc(output)
 
     def get_kernelcache_payload(self, arch: Optional[str] = None) -> bytes:
+        """Return the decompressed kernelcache payload, optionally sliced by arch."""
         im4p = IM4P(self.build_manifest.build_identities[0].get_component("KernelCache").data)
         im4p.payload.decompress()
         payload = im4p.payload.output().data
@@ -181,6 +195,7 @@ class BuildIdentity(UserDict):
             _decode_sandbox_profiles(kernel_output, output / "protobox", profile_type="protobox")
 
     def extract(self, output: Path, pem_db: Optional[str] = None) -> None:
+        """Extract the build identity contents into a filesystem layout."""
         logger.info(f"extracting into: {output}")
 
         build_identity = self.build_manifest.build_identities[0]
