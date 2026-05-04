@@ -21,7 +21,7 @@ AEA_MAGIC = b"AEA1"
 
 
 def extract_as(archive: Archive, member_name, output_path, chunk_size=64 * 1024):
-    """Extract a single member from a ZIP archive to a custom output path"""
+    """Extract one archive member into a caller-provided path."""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with archive.open(member_name) as source, open(output_path, "wb") as target:
         shutil.copyfileobj(source, target, length=chunk_size)
@@ -65,45 +65,99 @@ def _extract_dmg(dmg: Path, output: Path, sub_path: Optional[Path] = None, pem_d
         hdiutil("detach", "-force", mnt)
 
 
+def _decode_sandbox_profiles(kernel_output: Path, output: Path, profile_type: Optional[str] = None) -> None:
+    ipsw = local["ipsw"]
+    args = ["sb", "list", kernel_output]
+    if profile_type is not None:
+        args += ["--type", profile_type]
+
+    output.mkdir(exist_ok=True, parents=True)
+
+    for profile_name in ipsw(*args).splitlines():
+        profile_path = (output / profile_name).with_suffix(".sb")
+        decode_args = ["sb", "dec", kernel_output, profile_name]
+        if profile_type is not None:
+            decode_args += ["--type", profile_type]
+        try:
+            profile = ipsw(*decode_args)
+        except ProcessExecutionError as e:
+            logger.warning(f"failed to decode sandbox profile {profile_name}: {e}")
+            continue
+        profile_path.write_text(profile)
+
+
+def _extract_kernelcache(build_identity: "BuildIdentity", output: Path) -> Path:
+    kernel_component = build_identity.get_component("KernelCache")
+    kernel_path = Path(kernel_component.path)
+    kernel_output = output / kernel_path.parts[-1]
+    output.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"extracting kernel into: {kernel_output}")
+    im4p = IM4P(kernel_component.data)
+    im4p.payload.decompress()
+    kernel_output.write_bytes(im4p.payload.output().data)
+    try:
+        # In case the kernel is a FAT image, extract the arm64 macho
+        local["ipsw"]("macho", "lipo", "-a", "arm64", kernel_output)
+        next(iter(kernel_output.parent.glob("*.arm64"))).rename(kernel_output)
+    except ProcessExecutionError:
+        pass
+
+    return kernel_output
+
+
 class BuildIdentity(UserDict):
+    """Dictionary-backed wrapper for a single build identity."""
+
     def __init__(self, build_manifest, data):
+        """Wrap a single BuildIdentity entry from the manifest."""
         super().__init__(data)
         self.build_manifest = build_manifest
 
     @cached_property
     def device_class(self) -> str:
+        """Return the normalized device class for this build identity."""
         return self["Info"]["DeviceClass"].lower()
 
     @cached_property
     def restore_behavior(self) -> str:
+        """Return the restore behavior declared by the build identity."""
         return self["Info"].get("RestoreBehavior")
 
     @cached_property
     def variant(self):
+        """Return the variant string for this build identity."""
         return self["Info"].get("Variant")
 
     @cached_property
     def macos_variant(self) -> str:
+        """Return the macOS restore variant, if present."""
         return self["Info"].get("MacOSVariant")
 
     @cached_property
     def manifest(self) -> dict:
+        """Return the component manifest dictionary."""
         return self["Manifest"]
 
     @cached_property
     def minimum_system_partition(self):
+        """Return the minimum system partition requirement, if present."""
         return self["Info"].get("MinimumSystemPartition")
 
     def get_component_path(self, component: str) -> str:
+        """Return the archive path for a named component."""
         return self.manifest[component]["Info"]["Path"]
 
     def has_component(self, name: str) -> bool:
+        """Return whether the build identity contains a named component."""
         return name in self.manifest
 
     def get_component(self, name: str, **args) -> Component:
+        """Return a component wrapper for a named manifest entry."""
         return Component(self, name, **args)
 
     def extract_dsc(self, output: Path, pem_db: Optional[str] = None, split: bool = True) -> None:
+        """Extract the system cryptex DSC payloads into ``output``."""
         build_identity = self.build_manifest.build_identities[0]
         if not build_identity.has_component("Cryptex1,SystemOS"):
             return
@@ -120,6 +174,7 @@ class BuildIdentity(UserDict):
             split_dsc(output)
 
     def get_kernelcache_payload(self, arch: Optional[str] = None) -> bytes:
+        """Return the decompressed kernelcache payload, optionally sliced by arch."""
         im4p = IM4P(self.build_manifest.build_identities[0].get_component("KernelCache").data)
         im4p.payload.decompress()
         payload = im4p.payload.output().data
@@ -131,7 +186,16 @@ class BuildIdentity(UserDict):
             local["ipsw"]("macho", "lipo", "-a", arch, kernel_output)
             return Path(next(kernel_output.parent.glob(f"*.{arch}"))).read_bytes()
 
+    def extract_sandbox_profiles(self, output: Path) -> None:
+        """Decode normal and protobox sandbox profiles into ``output``."""
+        output.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory() as temp_dir:
+            kernel_output = _extract_kernelcache(self, Path(temp_dir))
+            _decode_sandbox_profiles(kernel_output, output)
+            _decode_sandbox_profiles(kernel_output, output / "protobox", profile_type="protobox")
+
     def extract(self, output: Path, pem_db: Optional[str] = None) -> None:
+        """Extract the build identity contents into a filesystem layout."""
         logger.info(f"extracting into: {output}")
 
         build_identity = self.build_manifest.build_identities[0]
@@ -143,21 +207,10 @@ class BuildIdentity(UserDict):
             extract_as(self.build_manifest.ipsw.archive, os_component_path, os_dmg)
             _extract_dmg(os_dmg, output, pem_db=pem_db)
 
-        kernel_component = build_identity.get_component("KernelCache")
-        kernel_path = Path(kernel_component.path)
-        kernel_output = output / "System/Library/Caches/com.apple.kernelcaches" / kernel_path.parts[-1]
-        kernel_output.parent.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"extracting kernel into: {kernel_output}")
-        im4p = IM4P(kernel_component.data)
-        im4p.payload.decompress()
-        kernel_output.write_bytes(im4p.payload.output().data)
-        try:
-            # In case the kernel is a FAT image, extract the arm64 macho
-            local["ipsw"]("macho", "lipo", "-a", "arm64", kernel_output)
-            next(iter(kernel_output.parent.glob("*.arm64"))).rename(kernel_output)
-        except ProcessExecutionError:
-            pass
+        kernel_output = _extract_kernelcache(self, output / "System/Library/Caches/com.apple.kernelcaches")
+        sandbox_profiles = output / "sandbox/profiles"
+        _decode_sandbox_profiles(kernel_output, sandbox_profiles)
+        _decode_sandbox_profiles(kernel_output, sandbox_profiles / "protobox", profile_type="protobox")
 
         for cryptex in ("App", "OS"):
             name = {

@@ -30,5 +30,7 @@ Options:
 Commands:
   device-support  Create DeviceSupport directory
   extract         Extract .ipsw into filesystem layout
+  extract-sandbox-profiles
+                  Extract decoded sandbox profiles from the kernelcache
   info            Parse given .ipsw basic info
 ```

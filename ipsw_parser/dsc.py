@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def split_dsc(root: Path) -> None:
+    """Split dyld shared caches found under ``root`` using ``ipsw dyld split``."""
     ipsw = local["ipsw"]
     dsc_paths = [
         root / "System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64",
@@ -26,17 +27,7 @@ def split_dsc(root: Path) -> None:
 
 
 def get_device_support_path(product_type: str, product_version: str, product_build_version: str) -> Path:
-    """
-    Construct the device support directory path.
-
-    Args:
-        product_type: Product type (e.g., 'iPhone15,2')
-        product_version: Product version (e.g., '16.0')
-        product_build_version: Product build version (e.g., '20A362')
-
-    Returns:
-        Path to the device support directory
-    """
+    """Return the Xcode DeviceSupport path for the given product metadata."""
     device_support_path = Path("~/Library/Developer/Xcode/iOS DeviceSupport").expanduser()
     device_support_path /= f"{product_type} {product_version} ({product_build_version})"
     return device_support_path
@@ -45,18 +36,7 @@ def get_device_support_path(product_type: str, product_version: str, product_bui
 def create_device_support_layout(
     product_type: str, product_version: str, product_build_version: str, root_path: Path
 ) -> Path:
-    """
-    Split DSC and create the "device support" directory layout.
-
-    Args:
-        product_type: Product type (e.g., 'iPhone15,2')
-        product_version: Product version (e.g., '16.0')
-        product_build_version: Product build version (e.g., '20A362')
-        root_path: System root path containing the extracted DSC symbols
-
-    Returns:
-        Path to the created device support directory
-    """
+    """Create the Xcode DeviceSupport layout for extracted symbol files."""
     device_support_path = get_device_support_path(product_type, product_version, product_build_version)
 
     # Split DSC files

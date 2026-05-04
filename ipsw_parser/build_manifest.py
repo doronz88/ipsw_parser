@@ -7,13 +7,17 @@ from ipsw_parser.exceptions import NoSuchBuildIdentityError
 
 
 class BuildManifest:
+    """Parsed ``BuildManifest.plist`` wrapper with lookup helpers."""
+
     def __init__(self, ipsw, manifest: bytes):
+        """Parse a BuildManifest plist for the given IPSW."""
         self.ipsw = ipsw
         self._manifest = plistlib.loads(manifest)
         self._parse_build_identities()
 
     @cached_property
     def build_major(self) -> int:
+        """Return the numeric major portion of the build version."""
         build_major = ""
         for i in self._manifest["ProductBuildVersion"]:
             if i.isdigit():
@@ -25,10 +29,12 @@ class BuildManifest:
 
     @cached_property
     def supported_product_types(self) -> list[str]:
+        """Return supported product identifiers from the manifest."""
         return self._manifest["SupportedProductTypes"]
 
     @cached_property
     def supported_product_types_family(self) -> str:
+        """Return the broad device family inferred from the first product type."""
         product = self.supported_product_types[0]
         if product.startswith("iBridge"):
             return "iBridge"
@@ -41,15 +47,18 @@ class BuildManifest:
 
     @cached_property
     def product_version(self) -> str:
+        """Return the product version from the manifest."""
         return self._manifest["ProductVersion"]
 
     @cached_property
     def product_build_version(self) -> str:
+        """Return the product build version from the manifest."""
         return self._manifest["ProductBuildVersion"]
 
     def get_build_identity(
         self, device_class: str, restore_behavior: Optional[str] = None, variant: Optional[str] = None
     ) -> BuildIdentity:
+        """Return the first build identity matching the requested filters."""
         for build_identity in self.build_identities:
             if variant is not None and variant not in build_identity.variant:
                 continue

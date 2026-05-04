@@ -42,7 +42,7 @@ ArchOption = Annotated[Optional[str], typer.Option(help="Arch name to extract us
 
 @cli.command("info")
 def info(ipsw: IpswArgument) -> None:
-    """Parse given .ipsw basic info"""
+    """Print basic metadata for an IPSW."""
     parsed_ipsw = IPSW.create_from_path(ipsw)
     print(f"SupportedProductTypes: {parsed_ipsw.build_manifest.supported_product_types}")
     print(f"ProductVersion: {parsed_ipsw.build_manifest.product_version}")
@@ -57,7 +57,7 @@ def info(ipsw: IpswArgument) -> None:
 
 @cli.command("extract")
 def extract(ipsw: IpswArgument, output: OutputArgument, pem_db: PemDbOption = None) -> None:
-    """Extract .ipsw into filesystem layout"""
+    """Extract an IPSW into the project filesystem layout."""
     parsed_ipsw = IPSW.create_from_path(ipsw)
 
     if not output.exists():
@@ -71,14 +71,25 @@ def extract(ipsw: IpswArgument, output: OutputArgument, pem_db: PemDbOption = No
 
 @cli.command("extract-kernel")
 def extract_kernel(ipsw: IpswArgument, output: OutputArgument, arch: ArchOption = None) -> None:
-    """Extract kernelcache from given .ipsw into given output filename"""
+    """Extract the kernelcache payload into a single output file."""
     parsed_ipsw = IPSW.create_from_path(ipsw)
     output.write_bytes(parsed_ipsw.build_manifest.build_identities[0].get_kernelcache_payload(arch=arch))
 
 
+@cli.command("extract-sandbox-profiles")
+def extract_sandbox_profiles(ipsw: IpswArgument, output: OutputArgument) -> None:
+    """Extract decoded sandbox profiles into the output directory."""
+    parsed_ipsw = IPSW.create_from_path(ipsw)
+
+    if not output.exists():
+        output.mkdir(parents=True, exist_ok=True)
+
+    parsed_ipsw.build_manifest.build_identities[0].extract_sandbox_profiles(output)
+
+
 @cli.command("device-support")
 def device_support(ipsw: IpswArgument, pem_db: PemDbOption = None) -> None:
-    """Create DeviceSupport directory"""
+    """Create an Xcode DeviceSupport directory for an IPSW."""
     IPSW.create_from_path(ipsw).create_device_support(pem_db=pem_db)
 
 
