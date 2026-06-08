@@ -209,8 +209,15 @@ class BuildIdentity(UserDict):
 
         kernel_output = _extract_kernelcache(self, output / "System/Library/Caches/com.apple.kernelcaches")
         sandbox_profiles = output / "sandbox/profiles"
-        _decode_sandbox_profiles(kernel_output, sandbox_profiles)
-        _decode_sandbox_profiles(kernel_output, sandbox_profiles / "protobox", profile_type="protobox")
+
+        try:
+            _decode_sandbox_profiles(kernel_output, sandbox_profiles)
+        except ProcessExecutionError as e:
+            logger.error("Failed to extract sandbox profiles: %s", e)
+        try:
+            _decode_sandbox_profiles(kernel_output, sandbox_profiles / "protobox", profile_type="protobox")
+        except ProcessExecutionError as e:
+            logger.error("Failed to extract sandbox profiles: %s", e)
 
         for cryptex in ("App", "OS"):
             name = {
