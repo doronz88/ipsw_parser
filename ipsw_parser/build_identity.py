@@ -216,7 +216,7 @@ class BuildIdentity(UserDict):
             logger.error("Failed to extract sandbox profiles: %s", e)
         try:
             _decode_sandbox_profiles(kernel_output, sandbox_profiles / "protobox", profile_type="protobox")
-        except ProcessExecutionError as e:
+        except (ProcessExecutionError, FileNotFoundError) as e:
             logger.error("Failed to extract sandbox profiles: %s", e)
 
         for cryptex in ("App", "OS"):
