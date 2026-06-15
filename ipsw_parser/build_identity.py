@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 from collections import UserDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import cached_property
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -72,8 +73,9 @@ def _decode_sandbox_profiles(kernel_output: Path, output: Path, profile_type: Op
         args += ["--type", profile_type]
 
     output.mkdir(exist_ok=True, parents=True)
+    profile_names = ipsw(*args).splitlines()
 
-    for profile_name in ipsw(*args).splitlines():
+    def decode_worker(profile_name: str) -> None:
         profile_path = (output / profile_name).with_suffix(".sb")
         decode_args = ["sb", "dec", kernel_output, profile_name]
         if profile_type is not None:
@@ -82,8 +84,19 @@ def _decode_sandbox_profiles(kernel_output: Path, output: Path, profile_type: Op
             profile = ipsw(*decode_args)
         except ProcessExecutionError as e:
             logger.warning(f"failed to decode sandbox profile {profile_name}: {e}")
-            continue
+            return
         profile_path.write_text(profile)
+
+    with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+        futures = [
+            executor.submit(
+                decode_worker,
+                profile_name,
+            )
+            for profile_name in profile_names
+        ]
+        for future in as_completed(futures):
+            future.result()
 
 
 def _extract_kernelcache(build_identity: "BuildIdentity", output: Path) -> Path:
