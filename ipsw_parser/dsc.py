@@ -3,14 +3,13 @@ import plistlib
 from datetime import datetime
 from pathlib import Path
 
-from plumbum import local
+from ipsw_parser.process import run
 
 logger = logging.getLogger(__name__)
 
 
 def split_dsc(root: Path) -> None:
     """Split dyld shared caches found under ``root`` using ``ipsw dyld split``."""
-    ipsw = local["ipsw"]
     dsc_paths = [
         root / "System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64",
         root / "System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e",
@@ -23,7 +22,7 @@ def split_dsc(root: Path) -> None:
             continue
 
         logger.info(f"splitting DSC: {dsc}")
-        ipsw("dyld", "split", dsc, "-o", root)
+        run("ipsw", "dyld", "split", dsc, "-o", root)
 
 
 def get_device_support_path(product_type: str, product_version: str, product_build_version: str) -> Path:
