@@ -73,7 +73,9 @@ def _decode_sandbox_profiles(kernel_output: Path, output: Path, profile_type: Op
     profile_names = run("ipsw", *args).splitlines()
 
     def decode_worker(profile_name: str) -> None:
-        profile_path = (output / profile_name).with_suffix(".sb")
+        # Not with_suffix(): it would cut a dotted name short, and com.apple.cloudd would share
+        # com.apple.sb with every other com.apple.* profile
+        profile_path = output / f"{profile_name}.sb"
         decode_args = ["sb", "dec", kernel_output, profile_name]
         if profile_type is not None:
             decode_args += ["--type", profile_type]
