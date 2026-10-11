@@ -9,12 +9,12 @@ from tempfile import TemporaryDirectory
 from typing import Optional
 
 import requests
-from plumbum import ProcessExecutionError, local
 from pyimg4 import IM4P
 
 from ipsw_parser.archive import Archive
 from ipsw_parser.component import Component
 from ipsw_parser.dsc import split_dsc
+from ipsw_parser.process import ProcessExecutionError, run
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,6 @@ def extract_as(archive: Archive, member_name, output_path, chunk_size=64 * 1024)
 
 
 def _extract_dmg(dmg: Path, output: Path, sub_path: Optional[Path] = None, pem_db: Optional[str] = None) -> None:
-    ipsw = local["ipsw"]
-    hdiutil = local["hdiutil"]
     # darwin system statistically have problems cleaning up after detaching the mountpoint
     with TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir)
@@ -52,9 +50,9 @@ def _extract_dmg(dmg: Path, output: Path, sub_path: Optional[Path] = None, pem_d
                     temp_pem_db.write_text(requests.get(pem_db, verify=False).text)
                     pem_db = temp_pem_db
                 args += ["--pem-db", pem_db]
-            ipsw(args)
+            run("ipsw", *args)
 
-        hdiutil("attach", "-mountpoint", mnt, dmg)
+        run("hdiutil", "attach", "-mountpoint", mnt, dmg)
 
         try:
             src = mnt if sub_path is None else mnt / sub_path
@@ -63,17 +61,16 @@ def _extract_dmg(dmg: Path, output: Path, sub_path: Optional[Path] = None, pem_d
             # when overwriting the same files, some of them don't contain write permissions
             pass
 
-        hdiutil("detach", "-force", mnt)
+        run("hdiutil", "detach", "-force", mnt)
 
 
 def _decode_sandbox_profiles(kernel_output: Path, output: Path, profile_type: Optional[str] = None) -> None:
-    ipsw = local["ipsw"]
     args = ["sb", "list", kernel_output]
     if profile_type is not None:
         args += ["--type", profile_type]
 
     output.mkdir(exist_ok=True, parents=True)
-    profile_names = ipsw(*args).splitlines()
+    profile_names = run("ipsw", *args).splitlines()
 
     def decode_worker(profile_name: str) -> None:
         profile_path = (output / profile_name).with_suffix(".sb")
@@ -81,7 +78,7 @@ def _decode_sandbox_profiles(kernel_output: Path, output: Path, profile_type: Op
         if profile_type is not None:
             decode_args += ["--type", profile_type]
         try:
-            profile = ipsw(*decode_args)
+            profile = run("ipsw", *decode_args)
         except ProcessExecutionError as e:
             logger.warning(f"failed to decode sandbox profile {profile_name}: {e}")
             return
@@ -111,7 +108,7 @@ def _extract_kernelcache(build_identity: "BuildIdentity", output: Path) -> Path:
     kernel_output.write_bytes(im4p.payload.output().data)
     try:
         # In case the kernel is a FAT image, extract the arm64 macho
-        local["ipsw"]("macho", "lipo", "-a", "arm64", kernel_output)
+        run("ipsw", "macho", "lipo", "-a", "arm64", kernel_output)
         next(iter(kernel_output.parent.glob("*.arm64"))).rename(kernel_output)
     except ProcessExecutionError:
         pass
@@ -196,7 +193,7 @@ class BuildIdentity(UserDict):
 
         with TemporaryDirectory() as temp_dir:
             kernel_output = Path(temp_dir) / "kernel"
-            local["ipsw"]("macho", "lipo", "-a", arch, kernel_output)
+            run("ipsw", "macho", "lipo", "-a", arch, kernel_output)
             return Path(next(kernel_output.parent.glob(f"*.{arch}"))).read_bytes()
 
     def extract_sandbox_profiles(self, output: Path) -> None:
