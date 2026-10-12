@@ -3,26 +3,45 @@ import plistlib
 from datetime import datetime
 from pathlib import Path
 
-from ipsw_parser.process import run
+from ipsw_parser.process import ProcessExecutionError, run
 
 logger = logging.getLogger(__name__)
 
 
-def split_dsc(root: Path) -> None:
-    """Split dyld shared caches found under ``root`` using ``ipsw dyld split``."""
-    dsc_paths = [
-        root / "System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64",
-        root / "System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e",
-        root / "private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64",
-        root / "private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e",
-    ]
+DSC_DIRECTORIES = (
+    "System/Library/Caches/com.apple.dyld",
+    "private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld",
+    # Some devices report the cryptex through its /System/Cryptexes/OS symlink instead
+    "System/Cryptexes/OS/System/Library/Caches/com.apple.dyld",
+)
+DSC_NAMES = ("dyld_shared_cache_arm64", "dyld_shared_cache_arm64e")
 
-    for dsc in dsc_paths:
-        if not dsc.exists():
-            continue
 
-        logger.info(f"splitting DSC: {dsc}")
-        run("ipsw", "dyld", "split", dsc, "-o", root)
+def split_dsc(root: Path) -> list[Path]:
+    """
+    Split dyld shared caches found under ``root`` into their images.
+
+    ``ipsw dyld split`` does it using Xcode's own extractor, which refuses a cache whose code
+    signature does not match (a patched one, for instance). Such a cache is extracted using
+    ``ipsw dyld extract`` instead.
+
+    :returns: The shared caches which were split.
+    """
+    split: list[Path] = []
+    for directory in DSC_DIRECTORIES:
+        for name in DSC_NAMES:
+            dsc = root / directory / name
+            if not dsc.exists():
+                continue
+
+            logger.info(f"splitting DSC: {dsc}")
+            try:
+                run("ipsw", "dyld", "split", dsc, "-o", root)
+            except ProcessExecutionError as e:
+                logger.warning(f"`ipsw dyld split` failed, extracting the images of {dsc} instead: {e}")
+                run("ipsw", "dyld", "extract", dsc, "--all", "--output", root)
+            split.append(dsc)
+    return split
 
 
 def get_device_support_path(product_type: str, product_version: str, product_build_version: str) -> Path:
@@ -35,17 +54,23 @@ def get_device_support_path(product_type: str, product_version: str, product_bui
 def create_device_support_layout(
     product_type: str, product_version: str, product_build_version: str, root_path: Path
 ) -> Path:
-    """Create the Xcode DeviceSupport layout for extracted symbol files."""
+    """
+    Create the Xcode DeviceSupport layout for extracted symbol files.
+
+    :raises FileNotFoundError: if ``root_path`` holds no dyld shared cache to split.
+    """
     device_support_path = get_device_support_path(product_type, product_version, product_build_version)
 
     # Split DSC files
-    split_dsc(root_path)
+    if not split_dsc(root_path):
+        raise FileNotFoundError(f"no dyld shared cache was found under {root_path}")
 
     # Clean up the cryptex DSC files after splitting
-    cryptex_dsc_dir = root_path / "private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld"
-    if cryptex_dsc_dir.exists():
-        for file in cryptex_dsc_dir.iterdir():
-            file.unlink()
+    for directory in DSC_DIRECTORIES[1:]:
+        cryptex_dsc_dir = root_path / directory
+        if cryptex_dsc_dir.exists():
+            for file in cryptex_dsc_dir.iterdir():
+                file.unlink()
 
     # Create the device support metadata files
     (device_support_path / "Info.plist").write_bytes(
