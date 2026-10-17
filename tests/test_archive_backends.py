@@ -1,6 +1,6 @@
 import plistlib
 from pathlib import Path
-from zipfile import ZipFile
+from zipfile import ZipFile, ZipInfo
 
 from ipsw_parser.archive import DirectoryArchive, ZipArchive
 from ipsw_parser.ipsw import IPSW
@@ -68,3 +68,36 @@ def test_directory_extractall_copies_requested_members(tmp_path: Path) -> None:
 
     assert (output / "Firmware" / "devel-file.bin").read_bytes() == b"dev"
     assert not (output / "Release" / "normal-file.bin").exists()
+
+
+def _cpio_header(ino: int, mode: int, namesize: int, filesize: int) -> bytes:
+    return f"070707000000{ino:06o}{mode:06o}000000000000000001000000{0:011o}{namesize:06o}{filesize:011o}".encode()
+
+
+def test_bootability_builds_odc_cpio_archive(tmp_path: Path) -> None:
+    archive_path = tmp_path / "sample.ipsw"
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr("BuildManifest.plist", _build_manifest())
+        for name, mode, data in (
+            ("BootabilityBundle/Restore/Bootability/payload.bin", 0o100644, b"hello"),
+            ("BootabilityBundle/Restore/Bootability/empty", 0o100600, b""),
+            ("BootabilityBundle/Restore/Firmware/Bootability.dmg.trustcache", 0o100644, b"trust"),
+            ("Firmware/unrelated.bin", 0o100644, b"ignored"),
+        ):
+            info = ZipInfo(name)
+            info.external_attr = mode << 16
+            archive.writestr(info, data)
+
+    with ZipFile(archive_path) as archive:
+        bootability = IPSW(ZipArchive(archive)).bootability
+
+    assert bootability == (
+        _cpio_header(1, 0o100644, 12, 5)
+        + b"payload.bin\0hello"
+        + _cpio_header(2, 0o100600, 6, 0)
+        + b"empty\0"
+        + _cpio_header(3, 0o100644, 23, 5)
+        + b"Bootability.trustcache\0trust"
+        + _cpio_header(0, 0, 11, 0)
+        + b"TRAILER!!!\0"
+    )
