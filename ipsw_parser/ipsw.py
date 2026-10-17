@@ -1,11 +1,12 @@
 import logging
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 from zipfile import ZipFile
 
-from construct import Const, Default, PaddedString, Struct
+from bytestruct import BinaryStruct, Bytes, Const
 from remotezip2 import RemoteZip
 
 from ipsw_parser.archive import Archive, ArchiveMember, DirectoryArchive, ZipArchive
@@ -15,23 +16,39 @@ from ipsw_parser.firmware import Firmware
 
 logger = logging.getLogger(__name__)
 
-cpio_odc_header = Struct(
-    "c_magic" / Const("070707", PaddedString(6, "utf8")),
-    "c_dev"
-    / Default(
-        PaddedString(6, "utf8"),
-        "0" * 6,
-    ),
-    "c_ino" / PaddedString(6, "utf8"),
-    "c_mode" / PaddedString(6, "utf8"),
-    "c_uid" / Default(PaddedString(6, "utf8"), "0" * 6),
-    "c_gid" / Default(PaddedString(6, "utf8"), "0" * 6),
-    "c_nlink" / PaddedString(6, "utf8"),
-    "c_rdev" / Default(PaddedString(6, "utf8"), "0" * 6),
-    "c_mtime" / Default(PaddedString(11, "utf8"), "0" * 11),
-    "c_namesize" / PaddedString(6, "utf8"),
-    "c_filesize" / Default(PaddedString(11, "utf8"), "0" * 11),
-)
+
+@dataclass
+class CpioOdcHeader(BinaryStruct):
+    """A POSIX.1 portable ("odc") cpio header: every field is zero-padded octal ASCII."""
+
+    c_magic: Annotated[bytes, Bytes(6), Const(b"070707")] = field(default=b"070707", init=False)
+    c_dev: Annotated[bytes, Bytes(6)]
+    c_ino: Annotated[bytes, Bytes(6)]
+    c_mode: Annotated[bytes, Bytes(6)]
+    c_uid: Annotated[bytes, Bytes(6)]
+    c_gid: Annotated[bytes, Bytes(6)]
+    c_nlink: Annotated[bytes, Bytes(6)]
+    c_rdev: Annotated[bytes, Bytes(6)]
+    c_mtime: Annotated[bytes, Bytes(11)]
+    c_namesize: Annotated[bytes, Bytes(6)]
+    c_filesize: Annotated[bytes, Bytes(11)]
+
+
+def _build_cpio_odc_header(ino: int, mode: int, nlink: int, namesize: int, filesize: int = 0) -> bytes:
+    """Build an odc cpio header; device, owner, rdev and mtime are always zero."""
+    zero6 = b"0" * 6
+    return CpioOdcHeader(
+        c_dev=zero6,
+        c_ino=f"{ino:06o}".encode(),
+        c_mode=f"{mode:06o}".encode(),
+        c_uid=zero6,
+        c_gid=zero6,
+        c_nlink=f"{nlink:06o}".encode(),
+        c_rdev=zero6,
+        c_mtime=b"0" * 11,
+        c_namesize=f"{namesize:06o}".encode(),
+        c_filesize=f"{filesize:011o}".encode(),
+    ).build()
 
 
 class IPSW:
@@ -105,13 +122,7 @@ class IPSW:
             filename = subpath
             filename = f"{filename}\0".encode()
             mode = e.external_attr >> 16
-            result += cpio_odc_header.build({
-                "c_ino": f"{inode:06o}",
-                "c_nlink": f"{nlink:06o}",
-                "c_mode": f"{mode:06o}",
-                "c_namesize": f"{len(filename):06o}",
-                "c_filesize": f"{e.file_size:011o}",
-            })
+            result += _build_cpio_odc_header(inode, mode, nlink, len(filename), e.file_size)
             inode += 1
             result += filename
             if not e.file_size:
@@ -123,15 +134,7 @@ class IPSW:
         filename = b"TRAILER!!!\0"
         inode = 0
         mode = 0
-        result += (
-            cpio_odc_header.build({
-                "c_ino": f"{inode:06o}",
-                "c_mode": f"{mode:06o}",
-                "c_nlink": f"{nlink:06o}",
-                "c_namesize": f"{len(filename):06o}",
-            })
-            + filename
-        )
+        result += _build_cpio_odc_header(inode, mode, nlink, len(filename)) + filename
         return result
 
     def read(self, path: str) -> bytes:

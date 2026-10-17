@@ -1,4 +1,4 @@
-construct>=2.9.29
+bytestruct>=0.1.0
 coloredlogs
 pyimg4>=0.8.8
 requests
