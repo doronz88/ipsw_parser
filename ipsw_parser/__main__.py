@@ -3,18 +3,17 @@ import logging
 from pathlib import Path
 from typing import Annotated, Optional
 
-import coloredlogs
+import ansilogs
 import typer
 
 from ipsw_parser.ipsw import IPSW
 
-coloredlogs.install(level=logging.DEBUG)
+ansilogs.install(logging.DEBUG)
 
 logging.getLogger("asyncio").disabled = True
 logging.getLogger("parso.cache").disabled = True
 logging.getLogger("parso.cache.pickle").disabled = True
 logging.getLogger("parso.python.diff").disabled = True
-logging.getLogger("humanfriendly.prompts").disabled = True
 logging.getLogger("blib2to3.pgen2.driver").disabled = True
 logging.getLogger("urllib3.connectionpool").disabled = True
 

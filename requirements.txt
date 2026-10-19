@@ -1,5 +1,5 @@
+ansilogs>=1.1.0
 bytestruct>=0.1.0
-coloredlogs
 pyimg4>=0.8.8
 requests
 remotezip2
