@@ -32,6 +32,10 @@ jobs:
       - name: Test install
         run: |
           python -m pip install -U .
+      - name: Type check
+        run: |
+          python -m pip install pytest pyright==1.1.411
+          pyright
       - name: Test show usage
         run: |
           python -m ipsw_parser --help

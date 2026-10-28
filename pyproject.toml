@@ -38,6 +38,9 @@ ipsw-parser = "ipsw_parser.__main__:cli"
 [tool.setuptools.packages.find]
 exclude = ["docs*", "tests*"]
 
+[tool.setuptools.package-data]
+ipsw_parser = ["py.typed"]
+
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
 version = { attr = "ipsw_parser._version.__version__" }
@@ -97,3 +100,9 @@ ignore = [
 
 [tool.ruff.format]
 preview = true
+
+[tool.pyright]
+include = ["ipsw_parser", "tests"]
+pythonVersion = "3.9"
+typeCheckingMode = "standard"
+strict = ["ipsw_parser"]

@@ -1,19 +1,24 @@
 import plistlib
 from functools import cached_property
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ipsw_parser.build_identity import BuildIdentity
 from ipsw_parser.exceptions import NoSuchBuildIdentityError
+
+if TYPE_CHECKING:
+    from ipsw_parser.ipsw import IPSW
 
 
 class BuildManifest:
     """Parsed ``BuildManifest.plist`` wrapper with lookup helpers."""
 
-    def __init__(self, ipsw, manifest: bytes):
+    def __init__(self, ipsw: "IPSW", manifest: bytes):
         """Parse a BuildManifest plist for the given IPSW."""
         self.ipsw = ipsw
-        self._manifest = plistlib.loads(manifest)
-        self._parse_build_identities()
+        self._manifest: dict[str, Any] = plistlib.loads(manifest)
+        self.build_identities: list[BuildIdentity] = [
+            BuildIdentity(self, build_identity) for build_identity in self._manifest["BuildIdentities"]
+        ]
 
     @cached_property
     def build_major(self) -> int:
@@ -60,7 +65,7 @@ class BuildManifest:
     ) -> BuildIdentity:
         """Return the first build identity matching the requested filters."""
         for build_identity in self.build_identities:
-            if variant is not None and variant not in build_identity.variant:
+            if variant is not None and (build_identity.variant is None or variant not in build_identity.variant):
                 continue
 
             if build_identity.device_class != device_class:
@@ -71,8 +76,3 @@ class BuildManifest:
 
             return build_identity
         raise NoSuchBuildIdentityError("failed to find the correct BuildIdentity from the BuildManifest")
-
-    def _parse_build_identities(self) -> None:
-        self.build_identities = []
-        for build_identity in self._manifest["BuildIdentities"]:
-            self.build_identities.append(BuildIdentity(self, build_identity))

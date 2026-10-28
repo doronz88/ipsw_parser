@@ -1,10 +1,10 @@
 import shutil
 import stat
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import BinaryIO, Protocol, Union
+from typing import IO, Protocol, Union
 from zipfile import ZipFile, ZipInfo
 
 
@@ -17,11 +17,24 @@ class ArchiveMember:
     external_attr: int
 
 
+class ArchiveEntry(Protocol):
+    """Metadata of an archive member: an ``ArchiveMember`` or a ``zipfile.ZipInfo``."""
+
+    @property
+    def filename(self) -> str: ...
+
+    @property
+    def file_size(self) -> int: ...
+
+    @property
+    def external_attr(self) -> int: ...
+
+
 class Archive(Protocol):
     """Protocol implemented by supported IPSW archive backends."""
 
     @property
-    def filelist(self) -> list[ArchiveMember]:
+    def filelist(self) -> Sequence[ArchiveEntry]:
         """Return archive members with metadata."""
         ...
 
@@ -29,7 +42,7 @@ class Archive(Protocol):
         """Return archive member names."""
         ...
 
-    def open(self, path: str) -> BinaryIO:
+    def open(self, path: str) -> IO[bytes]:
         """Open an archive member for binary reading."""
         ...
 
@@ -37,7 +50,7 @@ class Archive(Protocol):
         """Read an archive member into memory."""
         ...
 
-    def extractall(self, path: Path, members: Iterable[Union[ArchiveMember, ZipInfo, str]]) -> None:
+    def extractall(self, path: Path, members: Iterable[Union[ArchiveEntry, str]]) -> None:
         """Extract the selected archive members into ``path``."""
         ...
 
@@ -58,7 +71,7 @@ class ZipArchive:
         """Return ZIP member names."""
         return self._archive.namelist()
 
-    def open(self, path: str) -> BinaryIO:
+    def open(self, path: str) -> IO[bytes]:
         """Open a ZIP member for binary reading."""
         return self._archive.open(path)
 
@@ -66,9 +79,11 @@ class ZipArchive:
         """Read a ZIP member into memory."""
         return self._archive.read(path)
 
-    def extractall(self, path: Path, members: Iterable[Union[ArchiveMember, ZipInfo, str]]) -> None:
+    def extractall(self, path: Path, members: Iterable[Union[ArchiveEntry, str]]) -> None:
         """Extract the selected ZIP members into ``path``."""
-        self._archive.extractall(path=path, members=members)
+        self._archive.extractall(
+            path=path, members=[member if isinstance(member, str) else member.filename for member in members]
+        )
 
 
 class DirectoryArchive:
@@ -78,10 +93,14 @@ class DirectoryArchive:
         """Wrap an extracted IPSW directory."""
         self._root = root
 
-    @cached_property
+    @property
     def filelist(self) -> list[ArchiveMember]:
         """Return filesystem entries as archive-style metadata."""
-        result = []
+        return self._members
+
+    @cached_property
+    def _members(self) -> list[ArchiveMember]:
+        result: list[ArchiveMember] = []
         for file_path in sorted(path for path in self._root.rglob("*") if path.is_file()):
             file_stat = file_path.stat()
             relative_path = file_path.relative_to(self._root).as_posix()
@@ -99,7 +118,7 @@ class DirectoryArchive:
         """Return relative file paths under the archive root."""
         return [member.filename for member in self.filelist]
 
-    def open(self, path: str) -> BinaryIO:
+    def open(self, path: str) -> IO[bytes]:
         """Open a file relative to the archive root."""
         return (self._root / path).open("rb")
 
@@ -107,7 +126,7 @@ class DirectoryArchive:
         """Read a file relative to the archive root."""
         return (self._root / path).read_bytes()
 
-    def extractall(self, path: Path, members: Iterable[Union[ArchiveMember, ZipInfo, str]]) -> None:
+    def extractall(self, path: Path, members: Iterable[Union[ArchiveEntry, str]]) -> None:
         """Copy the selected members into ``path``."""
         for member in members:
             filename = member if isinstance(member, str) else member.filename
