@@ -211,6 +211,7 @@ class BuildIdentity(UserDict[str, Any]):
 
         with TemporaryDirectory() as temp_dir:
             kernel_output = Path(temp_dir) / "kernel"
+            kernel_output.write_bytes(payload)
             run("ipsw", "macho", "lipo", "-a", arch, kernel_output)
             return Path(next(kernel_output.parent.glob(f"*.{arch}"))).read_bytes()
 
