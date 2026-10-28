@@ -1,16 +1,25 @@
 import logging
 import os.path
 from functools import cached_property
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional, Protocol
 
 from ipsw_parser.exceptions import IpswException
 
+if TYPE_CHECKING:
+    from ipsw_parser.build_identity import BuildIdentity
 
-class TSSResponse(dict):
+
+class SupportsPathByEntry(Protocol):
+    """A TSS response that may name the path of a component."""
+
+    def get_path_by_entry(self, component: str) -> Optional[str]: ...
+
+
+class TSSResponse(dict[str, Any]):
     """Dictionary wrapper for TSS response payloads."""
 
     @property
-    def ap_img4_ticket(self):
+    def ap_img4_ticket(self) -> bytes:
         """Return the AP IMG4 ticket from the TSS response."""
         ticket = self.get("ApImg4Ticket")
 
@@ -20,11 +29,11 @@ class TSSResponse(dict):
         return ticket
 
     @property
-    def bb_ticket(self):
+    def bb_ticket(self) -> Optional[bytes]:
         """Return the baseband ticket from the TSS response, if present."""
         return self.get("BBTicket")
 
-    def get_path_by_entry(self, component: str):
+    def get_path_by_entry(self, component: str) -> Optional[str]:
         """Return the path for a component entry in the TSS response."""
         node = self.get(component)
         if node is not None:
@@ -38,9 +47,9 @@ class Component:
 
     def __init__(
         self,
-        build_identity,
+        build_identity: "BuildIdentity",
         name: str,
-        tss: TSSResponse = None,
+        tss: Optional[SupportsPathByEntry] = None,
         data: Optional[bytes] = None,
         path: Optional[str] = None,
     ):
@@ -67,9 +76,6 @@ class Component:
 
         if path is None:
             path = self.build_identity.get_component_path(self.name)
-
-        if path is None:
-            raise IpswException(f"Failed to find component path for: {self.name}")
 
         return path
 

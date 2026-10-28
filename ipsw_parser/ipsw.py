@@ -1,15 +1,16 @@
 import logging
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import IO, Annotated, Optional
 from zipfile import ZipFile
 
 from bytestruct import BinaryStruct, Bytes, Const
-from remotezip2 import RemoteZip
+from remotezip2 import RemoteZip  # pyright: ignore[reportMissingTypeStubs]
 
-from ipsw_parser.archive import Archive, ArchiveMember, DirectoryArchive, ZipArchive
+from ipsw_parser.archive import Archive, ArchiveEntry, DirectoryArchive, ZipArchive
 from ipsw_parser.build_manifest import BuildManifest
 from ipsw_parser.dsc import create_device_support_layout
 from ipsw_parser.firmware import Firmware
@@ -88,12 +89,12 @@ class IPSW:
         return self.read("SystemVersion.plist")
 
     @cached_property
-    def filelist(self) -> list[ArchiveMember]:
+    def filelist(self) -> Sequence[ArchiveEntry]:
         """Return archive members for the IPSW."""
         return self.archive.filelist
 
     @contextmanager
-    def open_path(self, path: str):
+    def open_path(self, path: str) -> Generator[IO[bytes], None, None]:
         """Open an IPSW member and close it automatically on exit."""
         file = self.archive.open(path)
         try:
@@ -152,7 +153,7 @@ class IPSW:
 
     def get_development_files(self) -> list[str]:
         """Return archive entries associated with development builds."""
-        result = []
+        result: list[str] = []
         for entry in self.archive.namelist():
             for release in ("devel", "kasan", "research"):
                 if release in entry.lower():

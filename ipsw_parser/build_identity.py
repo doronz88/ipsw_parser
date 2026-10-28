@@ -6,22 +6,27 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import cached_property
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import requests
-from pyimg4 import IM4P
+from pyimg4 import IM4P  # pyright: ignore[reportMissingTypeStubs]
 
 from ipsw_parser.archive import Archive
-from ipsw_parser.component import Component
+from ipsw_parser.component import Component, SupportsPathByEntry
 from ipsw_parser.dsc import split_dsc
 from ipsw_parser.process import ProcessExecutionError, run
+
+if TYPE_CHECKING:
+    from ipsw_parser.build_manifest import BuildManifest
 
 logger = logging.getLogger(__name__)
 
 AEA_MAGIC = b"AEA1"
 
 
-def extract_as(archive: Archive, member_name, output_path, chunk_size=64 * 1024):
+def extract_as(
+    archive: Archive, member_name: str, output_path: Union[str, "os.PathLike[str]"], chunk_size: int = 64 * 1024
+) -> None:
     """Extract one archive member into a caller-provided path."""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with archive.open(member_name) as source, open(output_path, "wb") as target:
@@ -30,8 +35,8 @@ def extract_as(archive: Archive, member_name, output_path, chunk_size=64 * 1024)
 
 def _extract_dmg(dmg: Path, output: Path, sub_path: Optional[Path] = None, pem_db: Optional[str] = None) -> None:
     # darwin system statistically have problems cleaning up after detaching the mountpoint
-    with TemporaryDirectory() as temp_dir:
-        temp_dir = Path(temp_dir)
+    with TemporaryDirectory() as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
         mnt = temp_dir / "mnt"
         mnt.mkdir()
 
@@ -42,14 +47,14 @@ def _extract_dmg(dmg: Path, output: Path, sub_path: Optional[Path] = None, pem_d
             aea_dmg = str(dmg.absolute()) + ".aea"
             dmg.rename(aea_dmg)
             dmg = temp_dir / Path(aea_dmg).name.rsplit(".", 1)[0]
-            args = ["fw", "aea", aea_dmg, "-o", temp_dir]
+            args: list[Union[str, Path]] = ["fw", "aea", aea_dmg, "-o", temp_dir]
             if pem_db is not None:
+                pem_db_path: Union[str, Path] = pem_db
                 if "://" in pem_db:
                     # create a local file containing it
-                    temp_pem_db = temp_dir / "pem-db.json"
-                    temp_pem_db.write_text(requests.get(pem_db, verify=False).text)
-                    pem_db = temp_pem_db
-                args += ["--pem-db", pem_db]
+                    pem_db_path = temp_dir / "pem-db.json"
+                    pem_db_path.write_text(requests.get(pem_db, verify=False).text)
+                args += ["--pem-db", pem_db_path]
             run("ipsw", *args)
 
         run("hdiutil", "attach", "-mountpoint", mnt, dmg)
@@ -65,7 +70,7 @@ def _extract_dmg(dmg: Path, output: Path, sub_path: Optional[Path] = None, pem_d
 
 
 def _decode_sandbox_profiles(kernel_output: Path, output: Path, profile_type: Optional[str] = None) -> None:
-    args = ["sb", "list", kernel_output]
+    args: list[Union[str, Path]] = ["sb", "list", kernel_output]
     if profile_type is not None:
         args += ["--type", profile_type]
 
@@ -76,7 +81,7 @@ def _decode_sandbox_profiles(kernel_output: Path, output: Path, profile_type: Op
         # Not with_suffix(): it would cut a dotted name short, and com.apple.cloudd would share
         # com.apple.sb with every other com.apple.* profile
         profile_path = output / f"{profile_name}.sb"
-        decode_args = ["sb", "dec", kernel_output, profile_name]
+        decode_args: list[Union[str, Path]] = ["sb", "dec", kernel_output, profile_name]
         if profile_type is not None:
             decode_args += ["--type", profile_type]
         try:
@@ -105,9 +110,7 @@ def _extract_kernelcache(build_identity: "BuildIdentity", output: Path) -> Path:
     output.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"extracting kernel into: {kernel_output}")
-    im4p = IM4P(kernel_component.data)
-    im4p.payload.decompress()
-    kernel_output.write_bytes(im4p.payload.output().data)
+    kernel_output.write_bytes(_im4p_payload(kernel_component.data))
     try:
         # In case the kernel is a FAT image, extract the arm64 macho
         run("ipsw", "macho", "lipo", "-a", "arm64", kernel_output)
@@ -118,10 +121,19 @@ def _extract_kernelcache(build_identity: "BuildIdentity", output: Path) -> Path:
     return kernel_output
 
 
-class BuildIdentity(UserDict):
+def _im4p_payload(data: bytes) -> bytes:
+    """Return the decompressed payload of an IM4P."""
+    payload = IM4P(data).payload
+    if payload is None:
+        raise ValueError("The IM4P carries no payload.")
+    payload.decompress()
+    return payload.output().data
+
+
+class BuildIdentity(UserDict[str, Any]):
     """Dictionary-backed wrapper for a single build identity."""
 
-    def __init__(self, build_manifest, data):
+    def __init__(self, build_manifest: "BuildManifest", data: dict[str, Any]):
         """Wrap a single BuildIdentity entry from the manifest."""
         super().__init__(data)
         self.build_manifest = build_manifest
@@ -132,27 +144,27 @@ class BuildIdentity(UserDict):
         return self["Info"]["DeviceClass"].lower()
 
     @cached_property
-    def restore_behavior(self) -> str:
+    def restore_behavior(self) -> Optional[str]:
         """Return the restore behavior declared by the build identity."""
         return self["Info"].get("RestoreBehavior")
 
     @cached_property
-    def variant(self):
+    def variant(self) -> Optional[str]:
         """Return the variant string for this build identity."""
         return self["Info"].get("Variant")
 
     @cached_property
-    def macos_variant(self) -> str:
+    def macos_variant(self) -> Optional[str]:
         """Return the macOS restore variant, if present."""
         return self["Info"].get("MacOSVariant")
 
     @cached_property
-    def manifest(self) -> dict:
+    def manifest(self) -> dict[str, Any]:
         """Return the component manifest dictionary."""
         return self["Manifest"]
 
     @cached_property
-    def minimum_system_partition(self):
+    def minimum_system_partition(self) -> Optional[int]:
         """Return the minimum system partition requirement, if present."""
         return self["Info"].get("MinimumSystemPartition")
 
@@ -164,9 +176,15 @@ class BuildIdentity(UserDict):
         """Return whether the build identity contains a named component."""
         return name in self.manifest
 
-    def get_component(self, name: str, **args) -> Component:
+    def get_component(
+        self,
+        name: str,
+        tss: Optional[SupportsPathByEntry] = None,
+        data: Optional[bytes] = None,
+        path: Optional[str] = None,
+    ) -> Component:
         """Return a component wrapper for a named manifest entry."""
-        return Component(self, name, **args)
+        return Component(self, name, tss=tss, data=data, path=path)
 
     def extract_dsc(self, output: Path, pem_db: Optional[str] = None, split: bool = True) -> None:
         """Extract the system cryptex DSC payloads into ``output``."""
@@ -187,14 +205,13 @@ class BuildIdentity(UserDict):
 
     def get_kernelcache_payload(self, arch: Optional[str] = None) -> bytes:
         """Return the decompressed kernelcache payload, optionally sliced by arch."""
-        im4p = IM4P(self.build_manifest.build_identities[0].get_component("KernelCache").data)
-        im4p.payload.decompress()
-        payload = im4p.payload.output().data
+        payload = _im4p_payload(self.build_manifest.build_identities[0].get_component("KernelCache").data)
         if arch is None:
             return payload
 
         with TemporaryDirectory() as temp_dir:
             kernel_output = Path(temp_dir) / "kernel"
+            kernel_output.write_bytes(payload)
             run("ipsw", "macho", "lipo", "-a", arch, kernel_output)
             return Path(next(kernel_output.parent.glob(f"*.{arch}"))).read_bytes()
 
