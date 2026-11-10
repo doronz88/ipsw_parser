@@ -13,6 +13,7 @@ from remotezip2 import RemoteZip  # pyright: ignore[reportMissingTypeStubs]
 from ipsw_parser.archive import Archive, ArchiveEntry, DirectoryArchive, ZipArchive
 from ipsw_parser.build_manifest import BuildManifest
 from ipsw_parser.dsc import create_device_support_layout
+from ipsw_parser.exceptions import IpswException
 from ipsw_parser.firmware import Firmware
 
 logger = logging.getLogger(__name__)
@@ -71,11 +72,15 @@ class IPSW:
         """Create an IPSW wrapper around an archive backend."""
         self.archive = archive
         self._logger = logging.getLogger(__file__)
+        try:
+            manifest_name = next(
+                f for f in self.archive.namelist() if f.startswith("BuildManifest") and f.endswith(".plist")
+            )
+        except StopIteration:
+            raise IpswException("archive does not contain a BuildManifest*.plist file") from None
         self.build_manifest = BuildManifest(
             self,
-            self.archive.read(
-                next(f for f in self.archive.namelist() if f.startswith("BuildManifest") and f.endswith(".plist"))
-            ),
+            self.archive.read(manifest_name),
         )
 
     @cached_property

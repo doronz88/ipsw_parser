@@ -2,7 +2,10 @@ import plistlib
 from pathlib import Path
 from zipfile import ZipFile, ZipInfo
 
+import pytest
+
 from ipsw_parser.archive import DirectoryArchive, ZipArchive
+from ipsw_parser.exceptions import IpswException
 from ipsw_parser.ipsw import IPSW
 
 
@@ -54,6 +57,13 @@ def test_zip_archive_supports_same_ipsw_behavior(tmp_path: Path) -> None:
         assert ipsw.build_manifest.product_build_version == "1A1"
         assert ipsw.restore_version == b"restore-version"
         assert ipsw.get_development_files() == ["Firmware/devel-file.bin"]
+
+
+def test_archive_without_manifest_raises_clean_error(tmp_path: Path) -> None:
+    (tmp_path / "not-a-manifest.txt").write_bytes(b"nope")
+
+    with pytest.raises(IpswException, match="BuildManifest"):
+        IPSW(DirectoryArchive(tmp_path))
 
 
 def test_directory_extractall_copies_requested_members(tmp_path: Path) -> None:
