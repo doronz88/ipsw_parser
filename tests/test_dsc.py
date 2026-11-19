@@ -8,11 +8,13 @@ from ipsw_parser.process import ProcessExecutionError
 CRYPTEX_SYMLINK_DSC = "System/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e"
 CRYPTEX_DSC = "private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e"
 SYSTEM_DSC = "System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e"
+SUFFIXED_DSC = "System/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64e_x1"
+SUBCACHE_EXTENSIONS = (".01", ".25.dylddata", ".26.dyldreadonly", ".79.dyldlinkedit", ".symbols")
 
 
 def _create(root: Path, path: str) -> Path:
     file = root / path
-    file.parent.mkdir(parents=True)
+    file.parent.mkdir(parents=True, exist_ok=True)
     file.write_bytes(b"dsc")
     return file
 
@@ -29,12 +31,36 @@ def commands(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
     return commands
 
 
-@pytest.mark.parametrize("path", [SYSTEM_DSC, CRYPTEX_DSC, CRYPTEX_SYMLINK_DSC])
+@pytest.mark.parametrize("path", [SYSTEM_DSC, CRYPTEX_DSC, CRYPTEX_SYMLINK_DSC, SUFFIXED_DSC])
 def test_split_dsc_finds_the_cache(tmp_path: Path, commands: list[tuple[str, ...]], path: str) -> None:
     cache = _create(tmp_path, path)
 
     assert dsc.split_dsc(tmp_path) == [cache]
     assert commands == [("ipsw", "dyld", "split", str(cache), "-o", str(tmp_path))]
+
+
+@pytest.mark.parametrize("path", [SYSTEM_DSC, SUFFIXED_DSC])
+def test_split_dsc_splits_only_the_main_cache_file(tmp_path: Path, commands: list[tuple[str, ...]], path: str) -> None:
+    cache = _create(tmp_path, path)
+    for extension in SUBCACHE_EXTENSIONS:
+        _create(tmp_path, path + extension)
+
+    assert dsc.split_dsc(tmp_path) == [cache]
+    assert commands == [("ipsw", "dyld", "split", str(cache), "-o", str(tmp_path))]
+
+
+def test_split_dsc_splits_every_architecture(tmp_path: Path, commands: list[tuple[str, ...]]) -> None:
+    caches = [_create(tmp_path, SYSTEM_DSC[:-1]), _create(tmp_path, SYSTEM_DSC)]
+
+    assert dsc.split_dsc(tmp_path) == caches
+
+
+def test_split_dsc_ignores_subcaches_without_their_main_cache(tmp_path: Path, commands: list[tuple[str, ...]]) -> None:
+    for extension in SUBCACHE_EXTENSIONS:
+        _create(tmp_path, SUFFIXED_DSC + extension)
+
+    assert dsc.split_dsc(tmp_path) == []
+    assert commands == []
 
 
 def test_split_dsc_extracts_a_cache_the_splitter_refuses(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -56,7 +82,7 @@ def test_split_dsc_extracts_a_cache_the_splitter_refuses(tmp_path: Path, monkeyp
     ]
 
 
-@pytest.mark.parametrize("path", [CRYPTEX_DSC, CRYPTEX_SYMLINK_DSC])
+@pytest.mark.parametrize("path", [CRYPTEX_DSC, CRYPTEX_SYMLINK_DSC, SUFFIXED_DSC])
 def test_device_support_layout_removes_the_split_cryptex_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, commands: list[tuple[str, ...]], path: str
 ) -> None:

@@ -14,7 +14,15 @@ DSC_DIRECTORIES = (
     # Some devices report the cryptex through its /System/Cryptexes/OS symlink instead
     "System/Cryptexes/OS/System/Library/Caches/com.apple.dyld",
 )
-DSC_NAMES = ("dyld_shared_cache_arm64", "dyld_shared_cache_arm64e")
+# The main cache file is the one with no extension: its subcaches and symbols are named after it
+# (`.01`, `.25.dylddata`, `.symbols`...). Its own name varies beyond the architecture, e.g.
+# `dyld_shared_cache_arm64e_x1`.
+DSC_NAME_PATTERN = "dyld_shared_cache_*"
+
+
+def find_dsc(directory: Path) -> list[Path]:
+    """Return the main dyld shared cache files which are directly under ``directory``."""
+    return sorted(file for file in directory.glob(DSC_NAME_PATTERN) if "." not in file.name and file.is_file())
 
 
 def split_dsc(root: Path) -> list[Path]:
@@ -29,11 +37,7 @@ def split_dsc(root: Path) -> list[Path]:
     """
     split: list[Path] = []
     for directory in DSC_DIRECTORIES:
-        for name in DSC_NAMES:
-            dsc = root / directory / name
-            if not dsc.exists():
-                continue
-
+        for dsc in find_dsc(root / directory):
             logger.info(f"splitting DSC: {dsc}")
             try:
                 run("ipsw", "dyld", "split", dsc, "-o", root)
